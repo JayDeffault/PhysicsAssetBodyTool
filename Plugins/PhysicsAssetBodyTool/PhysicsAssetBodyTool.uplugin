@@ -1,0 +1,19 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "1.0.0",
+  "FriendlyName": "Physics Asset Body Tool",
+  "Description": "Editor-only tools for rapidly authoring physics asset bodies and constraints on complex skeletal meshes.",
+  "Category": "Physics",
+  "CreatedBy": "OpenAI",
+  "CanContainContent": false,
+  "IsBetaVersion": false,
+  "Installed": false,
+  "Modules": [
+    {
+      "Name": "PhysicsAssetBodyTool",
+      "Type": "Editor",
+      "LoadingPhase": "Default"
+    }
+  ]
+}
