@@ -15,5 +15,6 @@
       "Type": "Editor",
       "LoadingPhase": "Default"
     }
-  ]
+  ],
+  "EngineVersion": "5.5.0"
 }
