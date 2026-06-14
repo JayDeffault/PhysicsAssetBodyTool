@@ -62,8 +62,8 @@ private:
     EPABTViewportPrimitiveType SelectedPrimitiveType = EPABTViewportPrimitiveType::None;
     int32 SelectedPrimitiveIndex = INDEX_NONE;
     bool bShowBodies = true;
-    bool bShowBones = true;
-    bool bShowFloor = true;
+    bool bShowBones = false;
+    bool bShowFloor = false;
     bool bShowGrid = true;
     FPABTOnViewportPrimitiveSelected OnPrimitiveSelected;
     UE::Widget::EWidgetMode WidgetMode = UE::Widget::WM_Translate;

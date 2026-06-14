@@ -122,14 +122,6 @@ public:
 
             PDI->SetHitProxy(nullptr);
 
-            if (bSelected)
-            {
-                const FVector Origin = BoneTM.GetLocation();
-                constexpr float AxisLength = 35.f;
-                PDI->DrawLine(Origin, Origin + BoneTM.GetUnitAxis(EAxis::X) * AxisLength, FLinearColor::Red, SDPG_Foreground, 2.f);
-                PDI->DrawLine(Origin, Origin + BoneTM.GetUnitAxis(EAxis::Y) * AxisLength, FLinearColor::Green, SDPG_Foreground, 2.f);
-                PDI->DrawLine(Origin, Origin + BoneTM.GetUnitAxis(EAxis::Z) * AxisLength, FLinearColor::Blue, SDPG_Foreground, 2.f);
-            }
         }
 
         for (const UPhysicsConstraintTemplate* Constraint : Asset->ConstraintSetup)
