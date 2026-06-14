@@ -43,7 +43,7 @@ void SPhysicsAssetBodyTool::Construct(const FArguments& InArgs)
                     + SVerticalBox::Slot().FillHeight(1.f)[ SAssignNew(BodyTree, STreeView<TSharedPtr<FPABTBodyTreeItem>>).TreeItemsSource(&BodyTreeRoots).SelectionMode(ESelectionMode::Single).OnGenerateRow(this,&SPhysicsAssetBodyTool::MakeBodyTreeRow).OnGetChildren_Lambda([](TSharedPtr<FPABTBodyTreeItem> I,TArray<TSharedPtr<FPABTBodyTreeItem>>& C){ C=I->Children; }).OnSelectionChanged(this,&SPhysicsAssetBodyTool::OnBodyTreeSelectionChanged) ]]
             ]
             + SSplitter::Slot().Value(.45f)[ SNew(SVerticalBox)
-                + SVerticalBox::Slot().FillHeight(.62f)[ SAssignNew(ViewportWidget, SPABTViewport).OnBoneSelected(this, &SPhysicsAssetBodyTool::OnViewportBoneSelected) ]
+                + SVerticalBox::Slot().FillHeight(.62f)[ SAssignNew(ViewportWidget, SPABTViewport).OnPrimitiveSelected(this, &SPhysicsAssetBodyTool::OnViewportPrimitiveSelected) ]
                 + SVerticalBox::Slot().FillHeight(.38f)[ DetailsView.ToSharedRef() ] ]
             + SSplitter::Slot().Value(.33f)[ SNew(SSplitter).Orientation(Orient_Vertical)
                 + SSplitter::Slot().Value(.38f)[BuildBodyPanel()]
@@ -104,18 +104,20 @@ void SPhysicsAssetBodyTool::RebuildPhysicsTree()
         BodyItem->BoneName = Setup->BoneName;
         BodyItem->Label = FText::Format(LOCTEXT("BodyTreeBody", "[Body] {0}"), FText::FromName(Setup->BoneName));
 
-        auto AddPrimitiveChild = [&](const FText& Label)
+        auto AddPrimitiveChild = [&](const FText& Label, EPABTPrimitiveType PrimitiveType, int32 PrimitiveIndex)
         {
             TSharedPtr<FPABTBodyTreeItem> Child = MakeShared<FPABTBodyTreeItem>();
             Child->Kind = FPABTBodyTreeItem::EKind::Primitive;
             Child->BoneName = Setup->BoneName;
             Child->Label = Label;
+            Child->PrimitiveType = PrimitiveType;
+            Child->PrimitiveIndex = PrimitiveIndex;
             BodyItem->Children.Add(Child);
         };
-        for (int32 Index = 0; Index < Setup->AggGeom.BoxElems.Num(); ++Index) AddPrimitiveChild(FText::Format(LOCTEXT("BodyTreeBox", "Box {0}"), Index));
-        for (int32 Index = 0; Index < Setup->AggGeom.SphereElems.Num(); ++Index) AddPrimitiveChild(FText::Format(LOCTEXT("BodyTreeSphere", "Sphere {0}"), Index));
-        for (int32 Index = 0; Index < Setup->AggGeom.SphylElems.Num(); ++Index) AddPrimitiveChild(FText::Format(LOCTEXT("BodyTreeCapsule", "Capsule {0}"), Index));
-        for (int32 Index = 0; Index < Setup->AggGeom.ConvexElems.Num(); ++Index) AddPrimitiveChild(FText::Format(LOCTEXT("BodyTreeConvex", "Convex {0}"), Index));
+        for (int32 Index = 0; Index < Setup->AggGeom.BoxElems.Num(); ++Index) AddPrimitiveChild(FText::Format(LOCTEXT("BodyTreeBox", "Box {0}"), Index), EPABTPrimitiveType::Box, Index);
+        for (int32 Index = 0; Index < Setup->AggGeom.SphereElems.Num(); ++Index) AddPrimitiveChild(FText::Format(LOCTEXT("BodyTreeSphere", "Sphere {0}"), Index), EPABTPrimitiveType::Sphere, Index);
+        for (int32 Index = 0; Index < Setup->AggGeom.SphylElems.Num(); ++Index) AddPrimitiveChild(FText::Format(LOCTEXT("BodyTreeCapsule", "Capsule {0}"), Index), EPABTPrimitiveType::Capsule, Index);
+        for (int32 Index = 0; Index < Setup->AggGeom.ConvexElems.Num(); ++Index) AddPrimitiveChild(FText::Format(LOCTEXT("BodyTreeConvex", "Convex {0}"), Index), EPABTPrimitiveType::Convex, Index);
         BodyTreeRoots.Add(BodyItem);
     }
 
@@ -152,6 +154,13 @@ void SPhysicsAssetBodyTool::OnBodyTreeSelectionChanged(TSharedPtr<FPABTBodyTreeI
     {
         SelectedBone = Item->BoneName;
         RefreshPreviewAndDetails();
+        if (ViewportWidget.IsValid())
+        {
+            const EPABTViewportPrimitiveType ViewportType = Item->Kind == FPABTBodyTreeItem::EKind::Primitive
+                ? (Item->PrimitiveType == EPABTPrimitiveType::Box ? EPABTViewportPrimitiveType::Box : Item->PrimitiveType == EPABTPrimitiveType::Sphere ? EPABTViewportPrimitiveType::Sphere : Item->PrimitiveType == EPABTPrimitiveType::Capsule ? EPABTViewportPrimitiveType::Capsule : EPABTViewportPrimitiveType::Convex)
+                : EPABTViewportPrimitiveType::None;
+            ViewportWidget->SetSelectedPrimitive(Item->BoneName, ViewportType, Item->Kind == FPABTBodyTreeItem::EKind::Primitive ? Item->PrimitiveIndex : INDEX_NONE);
+        }
         RefreshLists();
     }
 }
@@ -212,7 +221,7 @@ TSharedRef<ITableRow> SPhysicsAssetBodyTool::MakeBoneRow(TSharedPtr<FPABTBoneIte
     return SNew(STableRow<TSharedPtr<FPABTBoneItem>>, Owner)[ SNew(STextBlock).Text(FText::FromString(ModePrefix + Item->BoneName.ToString())).ColorAndOpacity(bHasBody ? FLinearColor::Green : (bMirror ? FLinearColor(.45f,.65f,1.f) : FLinearColor::White)) ];
 }
 void SPhysicsAssetBodyTool::OnBoneSelectionChanged(TSharedPtr<FPABTBoneItem> Item, ESelectInfo::Type) { if (Item) SelectedBone = Item->BoneName; RefreshPreviewAndDetails(); RefreshLists(); }
-void SPhysicsAssetBodyTool::OnViewportBoneSelected(FName BoneName) { SelectedBone = BoneName; RefreshPreviewAndDetails(); RefreshLists(); }
+void SPhysicsAssetBodyTool::OnViewportPrimitiveSelected(FName BoneName, EPABTViewportPrimitiveType, int32) { SelectedBone = BoneName; RefreshPreviewAndDetails(); RefreshLists(); }
 
 TSharedRef<SWidget> SPhysicsAssetBodyTool::BuildBodyPanel()
 {

@@ -11,18 +11,21 @@ class UPhysicsAsset;
 class USkeletalMesh;
 class USkeletalMeshComponent;
 
-DECLARE_DELEGATE_OneParam(FPABTOnViewportBoneSelected, FName);
+enum class EPABTViewportPrimitiveType : uint8 { None, Box, Sphere, Capsule, Convex };
+
+DECLARE_DELEGATE_ThreeParams(FPABTOnViewportPrimitiveSelected, FName, EPABTViewportPrimitiveType, int32);
 
 class SPABTViewport : public SEditorViewport
 {
 public:
     SLATE_BEGIN_ARGS(SPABTViewport) {}
-        SLATE_EVENT(FPABTOnViewportBoneSelected, OnBoneSelected)
+        SLATE_EVENT(FPABTOnViewportPrimitiveSelected, OnPrimitiveSelected)
     SLATE_END_ARGS()
 
     void Construct(const FArguments& InArgs);
     void SetPreviewAssets(USkeletalMesh* InSkeletalMesh, UPhysicsAsset* InPhysicsAsset);
     void SetSelectedBone(FName InBoneName);
+    void SetSelectedPrimitive(FName InBoneName, EPABTViewportPrimitiveType InPrimitiveType, int32 InPrimitiveIndex);
     void SelectBoneFromViewport(FName InBoneName);
     bool ApplySelectedBodyDelta(const FVector& WorldDrag, const FRotator& RotationDelta, const FVector& ScaleDelta, EAxisList::Type CurrentAxis);
     FReply FocusPreview();
@@ -30,6 +33,8 @@ public:
     USkeletalMeshComponent* GetPreviewComponent() const { return PreviewComponent; }
     UPhysicsAsset* GetPhysicsAsset() const { return PhysicsAsset.Get(); }
     FName GetSelectedBone() const { return SelectedBone; }
+    EPABTViewportPrimitiveType GetSelectedPrimitiveType() const { return SelectedPrimitiveType; }
+    int32 GetSelectedPrimitiveIndex() const { return SelectedPrimitiveIndex; }
     UE::Widget::EWidgetMode GetActiveWidgetMode() const { return WidgetMode; }
 
 protected:
@@ -52,10 +57,12 @@ private:
     USkeletalMeshComponent* PreviewComponent = nullptr;
     TWeakObjectPtr<UPhysicsAsset> PhysicsAsset;
     FName SelectedBone;
+    EPABTViewportPrimitiveType SelectedPrimitiveType = EPABTViewportPrimitiveType::None;
+    int32 SelectedPrimitiveIndex = INDEX_NONE;
     bool bShowBodies = true;
     bool bShowBones = true;
     bool bShowFloor = true;
     bool bShowGrid = true;
-    FPABTOnViewportBoneSelected OnBoneSelected;
+    FPABTOnViewportPrimitiveSelected OnPrimitiveSelected;
     UE::Widget::EWidgetMode WidgetMode = UE::Widget::WM_Translate;
 };

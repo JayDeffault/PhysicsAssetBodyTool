@@ -9,6 +9,7 @@ class SSearchBox;
 class UPhysicsAsset;
 class USkeletalMesh;
 class USkeletalBodySetup;
+enum class EPABTViewportPrimitiveType : uint8;
 
 struct FPABTBoneItem : public TSharedFromThis<FPABTBoneItem>
 {
@@ -21,6 +22,8 @@ struct FPABTBodyTreeItem : public TSharedFromThis<FPABTBodyTreeItem>
     EKind Kind = EKind::Body;
     FName BoneName;
     FText Label;
+    EPABTPrimitiveType PrimitiveType = EPABTPrimitiveType::Box;
+    int32 PrimitiveIndex = INDEX_NONE;
     TArray<TSharedPtr<FPABTBodyTreeItem>> Children;
 };
 
@@ -40,7 +43,7 @@ private:
     TSharedRef<ITableRow> MakeBodyTreeRow(TSharedPtr<FPABTBodyTreeItem> Item, const TSharedRef<STableViewBase>& Owner);
     void OnBodyTreeSelectionChanged(TSharedPtr<FPABTBodyTreeItem> Item, ESelectInfo::Type SelectInfo);
     void OnBoneSelectionChanged(TSharedPtr<FPABTBoneItem> Item, ESelectInfo::Type SelectInfo);
-    void OnViewportBoneSelected(FName BoneName);
+    void OnViewportPrimitiveSelected(FName BoneName, EPABTViewportPrimitiveType PrimitiveType, int32 PrimitiveIndex);
     TSharedPtr<SWidget> BuildBoneContextMenu();
     void SetSelectedBodiesPhysicsType(EPhysicsType NewPhysicsType);
     TSharedRef<SWidget> BuildAssetBar();

@@ -20,17 +20,21 @@
 #define LOCTEXT_NAMESPACE "PhysicsAssetBodyToolViewport"
 
 
-struct HPABTBodyProxy final : public HHitProxy
+struct HPABTPrimitiveProxy final : public HHitProxy
 {
     DECLARE_HIT_PROXY();
-    explicit HPABTBodyProxy(FName InBoneName)
+    HPABTPrimitiveProxy(FName InBoneName, EPABTViewportPrimitiveType InPrimitiveType, int32 InPrimitiveIndex)
         : HHitProxy(HPP_World)
         , BoneName(InBoneName)
+        , PrimitiveType(InPrimitiveType)
+        , PrimitiveIndex(InPrimitiveIndex)
     {
     }
     FName BoneName;
+    EPABTViewportPrimitiveType PrimitiveType = EPABTViewportPrimitiveType::None;
+    int32 PrimitiveIndex = INDEX_NONE;
 };
-IMPLEMENT_HIT_PROXY(HPABTBodyProxy, HHitProxy);
+IMPLEMENT_HIT_PROXY(HPABTPrimitiveProxy, HHitProxy);
 
 namespace
 {
@@ -76,27 +80,44 @@ public:
             const bool bSelected = Setup->BoneName == SelectedBone;
             const FColor Color = bSelected ? FColor::Yellow : FColor::Cyan;
             const uint8 DepthPriority = bSelected ? SDPG_Foreground : SDPG_World;
-            PDI->SetHitProxy(new HPABTBodyProxy(Setup->BoneName));
+            auto PrimitiveColor = [&](EPABTViewportPrimitiveType Type, int32 Index)
+            {
+                const bool bPrimitiveSelected = bSelected && Owner->GetSelectedPrimitiveType() == Type && Owner->GetSelectedPrimitiveIndex() == Index;
+                return bPrimitiveSelected ? FColor::Yellow : Color;
+            };
+            auto PrimitiveDepth = [&](EPABTViewportPrimitiveType Type, int32 Index)
+            {
+                const bool bPrimitiveSelected = bSelected && Owner->GetSelectedPrimitiveType() == Type && Owner->GetSelectedPrimitiveIndex() == Index;
+                return bPrimitiveSelected ? SDPG_Foreground : DepthPriority;
+            };
 
-            for (const FKBoxElem& Box : Setup->AggGeom.BoxElems)
+            for (int32 Index = 0; Index < Setup->AggGeom.BoxElems.Num(); ++Index)
             {
+                const FKBoxElem& Box = Setup->AggGeom.BoxElems[Index];
+                PDI->SetHitProxy(new HPABTPrimitiveProxy(Setup->BoneName, EPABTViewportPrimitiveType::Box, Index));
                 const FTransform ShapeTM = Box.GetTransform() * BoneTM;
-                DrawWireBox(PDI, ShapeTM.ToMatrixWithScale(), FBox(FVector(-Box.X, -Box.Y, -Box.Z) * 0.5f, FVector(Box.X, Box.Y, Box.Z) * 0.5f), Color, DepthPriority);
+                DrawWireBox(PDI, ShapeTM.ToMatrixWithScale(), FBox(FVector(-Box.X, -Box.Y, -Box.Z) * 0.5f, FVector(Box.X, Box.Y, Box.Z) * 0.5f), PrimitiveColor(EPABTViewportPrimitiveType::Box, Index), PrimitiveDepth(EPABTViewportPrimitiveType::Box, Index));
             }
-            for (const FKSphereElem& Sphere : Setup->AggGeom.SphereElems)
+            for (int32 Index = 0; Index < Setup->AggGeom.SphereElems.Num(); ++Index)
             {
+                const FKSphereElem& Sphere = Setup->AggGeom.SphereElems[Index];
+                PDI->SetHitProxy(new HPABTPrimitiveProxy(Setup->BoneName, EPABTViewportPrimitiveType::Sphere, Index));
                 const FTransform ShapeTM = Sphere.GetTransform() * BoneTM;
-                DrawWireSphere(PDI, ShapeTM.GetLocation(), Color, Sphere.Radius, 24, DepthPriority);
+                DrawWireSphere(PDI, ShapeTM.GetLocation(), PrimitiveColor(EPABTViewportPrimitiveType::Sphere, Index), Sphere.Radius, 24, PrimitiveDepth(EPABTViewportPrimitiveType::Sphere, Index));
             }
-            for (const FKSphylElem& Capsule : Setup->AggGeom.SphylElems)
+            for (int32 Index = 0; Index < Setup->AggGeom.SphylElems.Num(); ++Index)
             {
+                const FKSphylElem& Capsule = Setup->AggGeom.SphylElems[Index];
+                PDI->SetHitProxy(new HPABTPrimitiveProxy(Setup->BoneName, EPABTViewportPrimitiveType::Capsule, Index));
                 const FTransform ShapeTM = Capsule.GetTransform() * BoneTM;
-                DrawWireCapsule(PDI, ShapeTM.GetLocation(), ShapeTM.GetUnitAxis(EAxis::X), ShapeTM.GetUnitAxis(EAxis::Y), ShapeTM.GetUnitAxis(EAxis::Z), Color, Capsule.Radius, Capsule.Length * 0.5f, 16, DepthPriority);
+                DrawWireCapsule(PDI, ShapeTM.GetLocation(), ShapeTM.GetUnitAxis(EAxis::X), ShapeTM.GetUnitAxis(EAxis::Y), ShapeTM.GetUnitAxis(EAxis::Z), PrimitiveColor(EPABTViewportPrimitiveType::Capsule, Index), Capsule.Radius, Capsule.Length * 0.5f, 16, PrimitiveDepth(EPABTViewportPrimitiveType::Capsule, Index));
             }
-            for (const FKConvexElem& Convex : Setup->AggGeom.ConvexElems)
+            for (int32 Index = 0; Index < Setup->AggGeom.ConvexElems.Num(); ++Index)
             {
+                const FKConvexElem& Convex = Setup->AggGeom.ConvexElems[Index];
+                PDI->SetHitProxy(new HPABTPrimitiveProxy(Setup->BoneName, EPABTViewportPrimitiveType::Convex, Index));
                 const FTransform ShapeTM = Convex.GetTransform() * BoneTM;
-                DrawWireBox(PDI, ShapeTM.ToMatrixWithScale(), Convex.ElemBox, Color, DepthPriority);
+                DrawWireBox(PDI, ShapeTM.ToMatrixWithScale(), Convex.ElemBox, PrimitiveColor(EPABTViewportPrimitiveType::Convex, Index), PrimitiveDepth(EPABTViewportPrimitiveType::Convex, Index));
             }
 
             PDI->SetHitProxy(nullptr);
@@ -132,12 +153,12 @@ public:
 
     void ProcessClick(FSceneView& View, HHitProxy* HitProxy, FKey Key, EInputEvent Event, uint32 HitX, uint32 HitY) override
     {
-        if (HitProxy && HitProxy->IsA(HPABTBodyProxy::StaticGetType()))
+        if (HitProxy && HitProxy->IsA(HPABTPrimitiveProxy::StaticGetType()))
         {
-            HPABTBodyProxy* BodyProxy = static_cast<HPABTBodyProxy*>(HitProxy);
+            HPABTPrimitiveProxy* PrimitiveProxy = static_cast<HPABTPrimitiveProxy*>(HitProxy);
             if (Owner)
             {
-                Owner->SelectBoneFromViewport(BodyProxy->BoneName);
+                Owner->SetSelectedPrimitive(PrimitiveProxy->BoneName, PrimitiveProxy->PrimitiveType, PrimitiveProxy->PrimitiveIndex);
             }
             return;
         }
@@ -209,7 +230,7 @@ private:
 
 void SPABTViewport::Construct(const FArguments& InArgs)
 {
-    OnBoneSelected = InArgs._OnBoneSelected;
+    OnPrimitiveSelected = InArgs._OnPrimitiveSelected;
     PreviewScene = MakeShared<FAdvancedPreviewScene>(FPreviewScene::ConstructionValues());
     PreviewComponent = NewObject<USkeletalMeshComponent>();
     PreviewComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
@@ -246,6 +267,20 @@ void SPABTViewport::SetPreviewAssets(USkeletalMesh* InSkeletalMesh, UPhysicsAsse
 void SPABTViewport::SetSelectedBone(FName InBoneName)
 {
     SelectedBone = InBoneName;
+    SelectedPrimitiveType = EPABTViewportPrimitiveType::None;
+    SelectedPrimitiveIndex = INDEX_NONE;
+    if (ViewportClient.IsValid())
+    {
+        ViewportClient->Invalidate();
+    }
+}
+
+void SPABTViewport::SetSelectedPrimitive(FName InBoneName, EPABTViewportPrimitiveType InPrimitiveType, int32 InPrimitiveIndex)
+{
+    SelectedBone = InBoneName;
+    SelectedPrimitiveType = InPrimitiveType;
+    SelectedPrimitiveIndex = InPrimitiveIndex;
+    OnPrimitiveSelected.ExecuteIfBound(InBoneName, InPrimitiveType, InPrimitiveIndex);
     if (ViewportClient.IsValid())
     {
         ViewportClient->Invalidate();
@@ -331,7 +366,7 @@ FReply SPABTViewport::SetScaleMode() { SetWidgetMode(UE::Widget::WM_Scale); retu
 void SPABTViewport::SelectBoneFromViewport(FName InBoneName)
 {
     SelectedBone = InBoneName;
-    OnBoneSelected.ExecuteIfBound(InBoneName);
+    OnPrimitiveSelected.ExecuteIfBound(InBoneName, EPABTViewportPrimitiveType::None, INDEX_NONE);
     if (ViewportClient.IsValid())
     {
         ViewportClient->Invalidate();
@@ -422,8 +457,16 @@ bool SPABTViewport::ApplySelectedBodyDelta(const FVector& WorldDrag, const FRota
         Elem.SetTransform(TM);
     };
 
-    for (FKBoxElem& Elem : Setup->AggGeom.BoxElems)
+    auto ShouldApplyPrimitive = [&](EPABTViewportPrimitiveType Type, int32 Index)
     {
+        return SelectedPrimitiveType == EPABTViewportPrimitiveType::None ||
+            (SelectedPrimitiveType == Type && SelectedPrimitiveIndex == Index);
+    };
+
+    for (int32 Index = 0; Index < Setup->AggGeom.BoxElems.Num(); ++Index)
+    {
+        if (!ShouldApplyPrimitive(EPABTViewportPrimitiveType::Box, Index)) continue;
+        FKBoxElem& Elem = Setup->AggGeom.BoxElems[Index];
         ApplyTransformDelta(Elem);
         if (bScaleMode)
         {
@@ -432,16 +475,20 @@ bool SPABTViewport::ApplySelectedBodyDelta(const FVector& WorldDrag, const FRota
             Elem.Z = FMath::Max(0.1f, Elem.Z * (1.f + ScaleAxisDelta.Z));
         }
     }
-    for (FKSphereElem& Elem : Setup->AggGeom.SphereElems)
+    for (int32 Index = 0; Index < Setup->AggGeom.SphereElems.Num(); ++Index)
     {
+        if (!ShouldApplyPrimitive(EPABTViewportPrimitiveType::Sphere, Index)) continue;
+        FKSphereElem& Elem = Setup->AggGeom.SphereElems[Index];
         ApplyTransformDelta(Elem);
         if (bScaleMode)
         {
             Elem.Radius = FMath::Max(0.1f, Elem.Radius * (1.f + ScaleAxisDelta.GetAbsMax()));
         }
     }
-    for (FKSphylElem& Elem : Setup->AggGeom.SphylElems)
+    for (int32 Index = 0; Index < Setup->AggGeom.SphylElems.Num(); ++Index)
     {
+        if (!ShouldApplyPrimitive(EPABTViewportPrimitiveType::Capsule, Index)) continue;
+        FKSphylElem& Elem = Setup->AggGeom.SphylElems[Index];
         ApplyTransformDelta(Elem);
         if (bScaleMode)
         {
@@ -449,8 +496,10 @@ bool SPABTViewport::ApplySelectedBodyDelta(const FVector& WorldDrag, const FRota
             Elem.Length = FMath::Max(0.1f, Elem.Length * (1.f + ScaleAxisDelta.Z));
         }
     }
-    for (FKConvexElem& Elem : Setup->AggGeom.ConvexElems)
+    for (int32 Index = 0; Index < Setup->AggGeom.ConvexElems.Num(); ++Index)
     {
+        if (!ShouldApplyPrimitive(EPABTViewportPrimitiveType::Convex, Index)) continue;
+        FKConvexElem& Elem = Setup->AggGeom.ConvexElems[Index];
         ApplyTransformDelta(Elem);
         if (bScaleMode)
         {
