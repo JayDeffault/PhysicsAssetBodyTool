@@ -18,8 +18,6 @@
 #include "Modules/ModuleManager.h"
 #include "PropertyEditorModule.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
-#include "Editor.h"
-#include "Subsystems/AssetEditorSubsystem.h"
 
 #define LOCTEXT_NAMESPACE "PhysicsAssetBodyTool"
 
@@ -37,11 +35,7 @@ void SPhysicsAssetBodyTool::Construct(const FArguments& InArgs)
         + SVerticalBox::Slot().AutoHeight()[
             SNew(SBorder)
             .Padding(FMargin(8.f, 4.f))
-            [
-                SNew(SHorizontalBox)
-                + SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)[SNew(STextBlock).Text(this, &SPhysicsAssetBodyTool::GetSelectionSummaryText)]
-                + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(LOCTEXT("OpenNativePhAT", "Open Native PhAT")).ToolTipText(LOCTEXT("OpenNativePhATTooltip", "Open the selected Physics Asset in Unreal's standard Physics Asset Editor for native PhAT UI and gizmo behavior.")).OnClicked(this, &SPhysicsAssetBodyTool::OpenNativePhysicsAssetEditor)]
-            ]
+            [SNew(STextBlock).Text(this, &SPhysicsAssetBodyTool::GetSelectionSummaryText)]
         ]
         + SVerticalBox::Slot().FillHeight(1.f)[ SNew(SSplitter)
             + SSplitter::Slot().Value(.28f)[ SNew(SSplitter).Orientation(Orient_Vertical)
@@ -324,16 +318,5 @@ FReply SPhysicsAssetBodyTool::DeleteSelectedBody() { FPABTAssetEditor::DeleteBod
 FReply SPhysicsAssetBodyTool::MirrorSelectedBody() { FName M; if (MirrorSystem.FindMirrorName(SelectedBone, M)) MirrorSystem.MirrorBody(PhysicsAsset, SkeletalMesh, SelectedBone, M, EPABTMirrorAxis::X, false); RebuildPhysicsTree(); RefreshPreviewAndDetails(); RefreshLists(); RebuildBoneTree(); return FReply::Handled(); }
 FReply SPhysicsAssetBodyTool::CreateDoorConstraint() { if (SkeletalMesh && PhysicsAsset) { int32 I=SkeletalMesh->GetRefSkeleton().FindBoneIndex(SelectedBone); int32 P= I!=INDEX_NONE ? SkeletalMesh->GetRefSkeleton().GetParentIndex(I) : INDEX_NONE; if (P!=INDEX_NONE) FPABTConstraintSystem::CreateConstraint(PhysicsAsset, SkeletalMesh->GetRefSkeleton().GetBoneName(P), SelectedBone, EPABTHingePreset::VehicleDoor, FVector::UpVector, 0, 70); } RebuildPhysicsTree(); RefreshPreviewAndDetails(); RefreshLists(); return FReply::Handled(); }
 FReply SPhysicsAssetBodyTool::RunValidation() { Issues = FPABTValidationSystem::Validate(PhysicsAsset, SkeletalMesh, MirrorSystem); RefreshLists(); return FReply::Handled(); }
-FReply SPhysicsAssetBodyTool::OpenNativePhysicsAssetEditor()
-{
-    if (PhysicsAsset && GEditor)
-    {
-        if (UAssetEditorSubsystem* AssetEditorSubsystem = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>())
-        {
-            AssetEditorSubsystem->OpenEditorForAsset(PhysicsAsset);
-        }
-    }
-    return FReply::Handled();
-}
 
 #undef LOCTEXT_NAMESPACE
