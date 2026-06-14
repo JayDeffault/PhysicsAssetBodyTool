@@ -214,12 +214,7 @@ public:
 
     FVector GetWidgetLocation() const override
     {
-        if (!Owner || !Owner->GetPreviewComponent() || Owner->GetSelectedBone().IsNone())
-        {
-            return FVector::ZeroVector;
-        }
-        const int32 BoneIndex = Owner->GetPreviewComponent()->GetBoneIndex(Owner->GetSelectedBone());
-        return BoneIndex != INDEX_NONE ? Owner->GetPreviewComponent()->GetBoneTransform(BoneIndex).GetLocation() : FVector::ZeroVector;
+        return Owner ? Owner->GetSelectedWidgetLocation() : FVector::ZeroVector;
     }
 
     UE::Widget::EWidgetMode GetWidgetMode() const override
@@ -293,6 +288,50 @@ void SPABTViewport::SetSelectedPrimitive(FName InBoneName, EPABTViewportPrimitiv
     if (ViewportClient.IsValid())
     {
         ViewportClient->Invalidate();
+    }
+}
+
+FVector SPABTViewport::GetSelectedWidgetLocation() const
+{
+    UPhysicsAsset* Asset = PhysicsAsset.Get();
+    if (!Asset || !PreviewComponent || SelectedBone.IsNone())
+    {
+        return FVector::ZeroVector;
+    }
+
+    const int32 BoneIndex = PreviewComponent->GetBoneIndex(SelectedBone);
+    if (BoneIndex == INDEX_NONE)
+    {
+        return FVector::ZeroVector;
+    }
+
+    const FTransform BoneTM = PreviewComponent->GetBoneTransform(BoneIndex);
+    const USkeletalBodySetup* Setup = nullptr;
+    for (const USkeletalBodySetup* Candidate : Asset->SkeletalBodySetups)
+    {
+        if (Candidate && Candidate->BoneName == SelectedBone)
+        {
+            Setup = Candidate;
+            break;
+        }
+    }
+    if (!Setup)
+    {
+        return BoneTM.GetLocation();
+    }
+
+    switch (SelectedPrimitiveType)
+    {
+    case EPABTViewportPrimitiveType::Box:
+        return Setup->AggGeom.BoxElems.IsValidIndex(SelectedPrimitiveIndex) ? (Setup->AggGeom.BoxElems[SelectedPrimitiveIndex].GetTransform() * BoneTM).GetLocation() : BoneTM.GetLocation();
+    case EPABTViewportPrimitiveType::Sphere:
+        return Setup->AggGeom.SphereElems.IsValidIndex(SelectedPrimitiveIndex) ? (Setup->AggGeom.SphereElems[SelectedPrimitiveIndex].GetTransform() * BoneTM).GetLocation() : BoneTM.GetLocation();
+    case EPABTViewportPrimitiveType::Capsule:
+        return Setup->AggGeom.SphylElems.IsValidIndex(SelectedPrimitiveIndex) ? (Setup->AggGeom.SphylElems[SelectedPrimitiveIndex].GetTransform() * BoneTM).GetLocation() : BoneTM.GetLocation();
+    case EPABTViewportPrimitiveType::Convex:
+        return Setup->AggGeom.ConvexElems.IsValidIndex(SelectedPrimitiveIndex) ? (Setup->AggGeom.ConvexElems[SelectedPrimitiveIndex].GetTransform() * BoneTM).GetLocation() : BoneTM.GetLocation();
+    default:
+        return BoneTM.GetLocation();
     }
 }
 

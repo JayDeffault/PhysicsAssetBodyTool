@@ -37,6 +37,7 @@ public:
     EPABTViewportPrimitiveType GetSelectedPrimitiveType() const { return SelectedPrimitiveType; }
     int32 GetSelectedPrimitiveIndex() const { return SelectedPrimitiveIndex; }
     UE::Widget::EWidgetMode GetActiveWidgetMode() const { return WidgetMode; }
+    FVector GetSelectedWidgetLocation() const;
 
 protected:
     TSharedRef<FEditorViewportClient> MakeEditorViewportClient() override;
