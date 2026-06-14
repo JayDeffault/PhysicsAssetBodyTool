@@ -132,7 +132,7 @@ TSharedRef<ITableRow> SPhysicsAssetBodyTool::MakeBoneRow(TSharedPtr<FPABTBoneIte
 {
     USkeletalBodySetup* BodySetup = PhysicsAsset ? FPABTAssetEditor::FindBody(PhysicsAsset, Item->BoneName) : nullptr;
     const bool bHasBody = BodySetup != nullptr;
-    const FString ModePrefix = BodySetup ? (BodySetup->DefaultInstance.PhysicsType == PhysType_Kinematic ? TEXT("[K] ") : TEXT("[S] ")) : TEXT("    ");
+    const FString ModePrefix = BodySetup ? TEXT("[Body] ") : TEXT("       ");
     FName Mirror; const bool bMirror = MirrorSystem.FindMirrorName(Item->BoneName, Mirror);
     return SNew(STableRow<TSharedPtr<FPABTBoneItem>>, Owner)[ SNew(STextBlock).Text(FText::FromString(ModePrefix + Item->BoneName.ToString())).ColorAndOpacity(bHasBody ? FLinearColor::Green : (bMirror ? FLinearColor(.45f,.65f,1.f) : FLinearColor::White)) ];
 }

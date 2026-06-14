@@ -75,7 +75,6 @@ void FPABTAssetEditor::SetBodyPhysicsType(UPhysicsAsset* Asset, FName BoneName, 
     Asset->Modify();
     Setup->Modify();
     Setup->DefaultInstance.SetInstanceSimulatePhysics(NewPhysicsType == PhysType_Simulated);
-    Setup->DefaultInstance.PhysicsType = NewPhysicsType;
     FinalizeAssetChange(Asset);
 }
 

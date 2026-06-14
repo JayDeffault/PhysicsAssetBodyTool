@@ -23,7 +23,6 @@ void SPABTViewport::Construct(const FArguments& InArgs)
     PreviewComponent->bSelectable = false;
     PreviewScene->AddComponent(PreviewComponent, FTransform::Identity);
     SEditorViewport::Construct(SEditorViewport::FArguments());
-    AddOverlayWidget(SNew(STextBlock).Text(this, &SPABTViewport::GetStatsText).ColorAndOpacity(FLinearColor::White).ShadowOffset(FVector2D(1.f, 1.f)));
 }
 
 void SPABTViewport::SetPreviewAssets(USkeletalMesh* InSkeletalMesh, UPhysicsAsset* InPhysicsAsset)
@@ -102,6 +101,7 @@ TSharedPtr<SWidget> SPABTViewport::MakeViewportToolbar()
             + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text_Lambda([this](){ return bShowFloor ? LOCTEXT("FloorOn", "Floor: On") : LOCTEXT("FloorOff", "Floor: Off"); }).OnClicked(this, &SPABTViewport::ToggleFloor)]
             + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text_Lambda([this](){ return bShowGrid ? LOCTEXT("GridOn", "Grid: On") : LOCTEXT("GridOff", "Grid: Off"); }).OnClicked(this, &SPABTViewport::ToggleGrid)]
             + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(LOCTEXT("Focus", "Focus")).OnClicked(this, &SPABTViewport::FocusPreview)]
+            + SHorizontalBox::Slot().FillWidth(1.f).HAlign(HAlign_Right)[SNew(STextBlock).Text(this, &SPABTViewport::GetStatsText)]
         ];
 }
 
