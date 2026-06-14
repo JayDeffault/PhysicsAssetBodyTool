@@ -242,7 +242,16 @@ TSharedRef<ITableRow> SPhysicsAssetBodyTool::MakeBoneRow(TSharedPtr<FPABTBoneIte
     return SNew(STableRow<TSharedPtr<FPABTBoneItem>>, Owner)[ SNew(STextBlock).Text(FText::FromString(ModePrefix + Item->BoneName.ToString())).ColorAndOpacity(bHasBody ? FLinearColor::Green : (bMirror ? FLinearColor(.45f,.65f,1.f) : FLinearColor::White)) ];
 }
 void SPhysicsAssetBodyTool::OnBoneSelectionChanged(TSharedPtr<FPABTBoneItem> Item, ESelectInfo::Type) { if (Item) SelectedBone = Item->BoneName; RefreshPreviewAndDetails(); RefreshLists(); }
-void SPhysicsAssetBodyTool::OnViewportPrimitiveSelected(FName BoneName, EPABTViewportPrimitiveType, int32) { SelectedBone = BoneName; RefreshPreviewAndDetails(); RefreshLists(); }
+void SPhysicsAssetBodyTool::OnViewportPrimitiveSelected(FName BoneName, EPABTViewportPrimitiveType, int32)
+{
+    SelectedBone = BoneName;
+    if (DetailsView.IsValid())
+    {
+        UObject* ObjectToInspect = PhysicsAsset ? FPABTAssetEditor::FindBody(PhysicsAsset, SelectedBone) : nullptr;
+        DetailsView->SetObject(ObjectToInspect ? ObjectToInspect : PhysicsAsset);
+    }
+    RefreshLists();
+}
 
 TSharedRef<SWidget> SPhysicsAssetBodyTool::BuildBodyPanel()
 {
