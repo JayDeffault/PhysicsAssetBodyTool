@@ -492,7 +492,30 @@ bool SPABTViewport::ApplySelectedBodyDelta(const FVector& WorldDrag, const FRota
 
     const FVector WorldConstrainedDrag = bTranslateMode ? WorldDrag : FVector::ZeroVector;
     const FVector LocalDrag = BoneTM.InverseTransformVectorNoScale(WorldConstrainedDrag);
-    const FQuat LocalRot = bRotateMode ? BoneTM.InverseTransformRotation(RotationDelta.Quaternion()) : FQuat::Identity;
+
+    FQuat LocalRot = FQuat::Identity;
+    if (bRotateMode && !RotationDelta.IsNearlyZero())
+    {
+        // The editor widget can report small Euler deltas on non-active axes while rotating.
+        // Applying the full rotator every frame makes simple collision shapes appear to spin
+        // unpredictably. Match the standard single-axis widget behavior: keep only the picked
+        // axis delta, convert that world-axis rotation into the selected bone's local space,
+        // then normalize before writing it back to AggGeom.
+        auto BuildAxisRotation = [&](EAxisList::Type Axis, const FVector& WorldAxis, float Degrees)
+        {
+            if (!HasAxis(Axis) || FMath::IsNearlyZero(Degrees, KINDA_SMALL_NUMBER))
+            {
+                return FQuat::Identity;
+            }
+            const FVector LocalAxis = BoneTM.InverseTransformVectorNoScale(WorldAxis).GetSafeNormal();
+            return LocalAxis.IsNearlyZero() ? FQuat::Identity : FQuat(LocalAxis, FMath::DegreesToRadians(Degrees));
+        };
+
+        LocalRot = BuildAxisRotation(EAxisList::X, FVector::XAxisVector, RotationDelta.Roll)
+            * BuildAxisRotation(EAxisList::Y, FVector::YAxisVector, RotationDelta.Pitch)
+            * BuildAxisRotation(EAxisList::Z, FVector::ZAxisVector, RotationDelta.Yaw);
+        LocalRot.Normalize();
+    }
 
     FVector ScaleAxisDelta = FVector::ZeroVector;
     if (bScaleMode)
@@ -511,6 +534,7 @@ bool SPABTViewport::ApplySelectedBodyDelta(const FVector& WorldDrag, const FRota
         FTransform TM = Elem.GetTransform();
         TM.AddToTranslation(LocalDrag);
         TM.ConcatenateRotation(LocalRot);
+        TM.NormalizeRotation();
         Elem.SetTransform(TM);
     };
 
