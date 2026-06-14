@@ -33,10 +33,15 @@ void SPhysicsAssetBodyTool::Construct(const FArguments& InArgs)
     ChildSlot [ SNew(SVerticalBox)
         + SVerticalBox::Slot().AutoHeight()[BuildAssetBar()]
         + SVerticalBox::Slot().FillHeight(1.f)[ SNew(SSplitter)
-            + SSplitter::Slot().Value(.22f)[ SNew(SVerticalBox)
-                + SVerticalBox::Slot().AutoHeight()[ SNew(STextBlock).Text(LOCTEXT("SkeletonTreeHeader", "Skeleton")) ]
-                + SVerticalBox::Slot().AutoHeight()[ SAssignNew(SearchBox, SSearchBox).HintText(LOCTEXT("SearchBones", "Search bones")).OnTextChanged_Lambda([this](const FText& T){ SearchText=T.ToString(); RebuildBoneTree(); }) ]
-                + SVerticalBox::Slot().FillHeight(1.f)[ SAssignNew(BoneTree, STreeView<TSharedPtr<FPABTBoneItem>>).TreeItemsSource(&VisibleRootBones).SelectionMode(ESelectionMode::Multi).OnGenerateRow(this,&SPhysicsAssetBodyTool::MakeBoneRow).OnGetChildren_Lambda([](TSharedPtr<FPABTBoneItem> I,TArray<TSharedPtr<FPABTBoneItem>>& C){ C=I->Children; }).OnSelectionChanged(this,&SPhysicsAssetBodyTool::OnBoneSelectionChanged).OnContextMenuOpening(this,&SPhysicsAssetBodyTool::BuildBoneContextMenu) ]]
+            + SSplitter::Slot().Value(.22f)[ SNew(SSplitter).Orientation(Orient_Vertical)
+                + SSplitter::Slot().Value(.52f)[ SNew(SVerticalBox)
+                    + SVerticalBox::Slot().AutoHeight()[ SNew(STextBlock).Text(LOCTEXT("SkeletonTreeHeader", "Skeleton")) ]
+                    + SVerticalBox::Slot().AutoHeight()[ SAssignNew(SearchBox, SSearchBox).HintText(LOCTEXT("SearchBones", "Search bones")).OnTextChanged_Lambda([this](const FText& T){ SearchText=T.ToString(); RebuildBoneTree(); }) ]
+                    + SVerticalBox::Slot().FillHeight(1.f)[ SAssignNew(BoneTree, STreeView<TSharedPtr<FPABTBoneItem>>).TreeItemsSource(&VisibleRootBones).SelectionMode(ESelectionMode::Multi).OnGenerateRow(this,&SPhysicsAssetBodyTool::MakeBoneRow).OnGetChildren_Lambda([](TSharedPtr<FPABTBoneItem> I,TArray<TSharedPtr<FPABTBoneItem>>& C){ C=I->Children; }).OnSelectionChanged(this,&SPhysicsAssetBodyTool::OnBoneSelectionChanged).OnContextMenuOpening(this,&SPhysicsAssetBodyTool::BuildBoneContextMenu) ]]
+                + SSplitter::Slot().Value(.48f)[ SNew(SVerticalBox)
+                    + SVerticalBox::Slot().AutoHeight()[ SNew(STextBlock).Text(LOCTEXT("PhysicsTreeHeader", "Physics Bodies / Primitives")) ]
+                    + SVerticalBox::Slot().FillHeight(1.f)[ SAssignNew(BodyTree, STreeView<TSharedPtr<FPABTBodyTreeItem>>).TreeItemsSource(&BodyTreeRoots).SelectionMode(ESelectionMode::Single).OnGenerateRow(this,&SPhysicsAssetBodyTool::MakeBodyTreeRow).OnGetChildren_Lambda([](TSharedPtr<FPABTBodyTreeItem> I,TArray<TSharedPtr<FPABTBodyTreeItem>>& C){ C=I->Children; }).OnSelectionChanged(this,&SPhysicsAssetBodyTool::OnBodyTreeSelectionChanged) ]]
+            ]
             + SSplitter::Slot().Value(.45f)[ SNew(SVerticalBox)
                 + SVerticalBox::Slot().FillHeight(.62f)[ SAssignNew(ViewportWidget, SPABTViewport).OnBoneSelected(this, &SPhysicsAssetBodyTool::OnViewportBoneSelected) ]
                 + SVerticalBox::Slot().FillHeight(.38f)[ DetailsView.ToSharedRef() ] ]
@@ -62,9 +67,9 @@ void SPhysicsAssetBodyTool::SetSkeletalMesh(const FAssetData& Data)
 {
     SkeletalMesh = Cast<USkeletalMesh>(Data.GetAsset());
     if (SkeletalMesh && SkeletalMesh->GetPhysicsAsset()) PhysicsAsset = SkeletalMesh->GetPhysicsAsset();
-    RebuildBoneTree(); RefreshPreviewAndDetails(); RefreshLists();
+    RebuildBoneTree(); RebuildPhysicsTree(); RefreshPreviewAndDetails(); RefreshLists();
 }
-void SPhysicsAssetBodyTool::SetPhysicsAsset(const FAssetData& Data) { PhysicsAsset = Cast<UPhysicsAsset>(Data.GetAsset()); RefreshPreviewAndDetails(); RefreshLists(); }
+void SPhysicsAssetBodyTool::SetPhysicsAsset(const FAssetData& Data) { PhysicsAsset = Cast<UPhysicsAsset>(Data.GetAsset()); RebuildPhysicsTree(); RefreshPreviewAndDetails(); RefreshLists(); }
 
 void SPhysicsAssetBodyTool::RebuildBoneTree()
 {
@@ -81,6 +86,75 @@ bool SPhysicsAssetBodyTool::BoneFilter(TSharedPtr<FPABTBoneItem> Item) const
     return SearchText.IsEmpty() || Item->BoneName.ToString().Contains(SearchText);
 }
 
+
+void SPhysicsAssetBodyTool::RebuildPhysicsTree()
+{
+    BodyTreeRoots.Reset();
+    if (!PhysicsAsset)
+    {
+        if (BodyTree) BodyTree->RequestTreeRefresh();
+        return;
+    }
+
+    for (USkeletalBodySetup* Setup : PhysicsAsset->SkeletalBodySetups)
+    {
+        if (!Setup) continue;
+        TSharedPtr<FPABTBodyTreeItem> BodyItem = MakeShared<FPABTBodyTreeItem>();
+        BodyItem->Kind = FPABTBodyTreeItem::EKind::Body;
+        BodyItem->BoneName = Setup->BoneName;
+        BodyItem->Label = FText::Format(LOCTEXT("BodyTreeBody", "[Body] {0}"), FText::FromName(Setup->BoneName));
+
+        auto AddPrimitiveChild = [&](const FText& Label)
+        {
+            TSharedPtr<FPABTBodyTreeItem> Child = MakeShared<FPABTBodyTreeItem>();
+            Child->Kind = FPABTBodyTreeItem::EKind::Primitive;
+            Child->BoneName = Setup->BoneName;
+            Child->Label = Label;
+            BodyItem->Children.Add(Child);
+        };
+        for (int32 Index = 0; Index < Setup->AggGeom.BoxElems.Num(); ++Index) AddPrimitiveChild(FText::Format(LOCTEXT("BodyTreeBox", "Box {0}"), Index));
+        for (int32 Index = 0; Index < Setup->AggGeom.SphereElems.Num(); ++Index) AddPrimitiveChild(FText::Format(LOCTEXT("BodyTreeSphere", "Sphere {0}"), Index));
+        for (int32 Index = 0; Index < Setup->AggGeom.SphylElems.Num(); ++Index) AddPrimitiveChild(FText::Format(LOCTEXT("BodyTreeCapsule", "Capsule {0}"), Index));
+        for (int32 Index = 0; Index < Setup->AggGeom.ConvexElems.Num(); ++Index) AddPrimitiveChild(FText::Format(LOCTEXT("BodyTreeConvex", "Convex {0}"), Index));
+        BodyTreeRoots.Add(BodyItem);
+    }
+
+    TSharedPtr<FPABTBodyTreeItem> ConstraintRoot = MakeShared<FPABTBodyTreeItem>();
+    ConstraintRoot->Kind = FPABTBodyTreeItem::EKind::ConstraintGroup;
+    ConstraintRoot->Label = LOCTEXT("ConstraintsRoot", "Constraints");
+    for (UPhysicsConstraintTemplate* Constraint : PhysicsAsset->ConstraintSetup)
+    {
+        if (!Constraint) continue;
+        TSharedPtr<FPABTBodyTreeItem> Item = MakeShared<FPABTBodyTreeItem>();
+        Item->Kind = FPABTBodyTreeItem::EKind::Constraint;
+        Item->BoneName = Constraint->DefaultInstance.ConstraintBone2;
+        Item->Label = FText::Format(LOCTEXT("ConstraintTreeItem", "{0} -> {1}"), FText::FromName(Constraint->DefaultInstance.ConstraintBone1), FText::FromName(Constraint->DefaultInstance.ConstraintBone2));
+        ConstraintRoot->Children.Add(Item);
+    }
+    if (ConstraintRoot->Children.Num() > 0)
+    {
+        BodyTreeRoots.Add(ConstraintRoot);
+    }
+
+    if (BodyTree) BodyTree->RequestTreeRefresh();
+}
+
+TSharedRef<ITableRow> SPhysicsAssetBodyTool::MakeBodyTreeRow(TSharedPtr<FPABTBodyTreeItem> Item, const TSharedRef<STableViewBase>& Owner)
+{
+    const FLinearColor Color = Item->Kind == FPABTBodyTreeItem::EKind::Body ? FLinearColor::Green :
+        Item->Kind == FPABTBodyTreeItem::EKind::Primitive ? FLinearColor(0.65f, 0.85f, 1.f) : FLinearColor(1.f, 0.45f, 1.f);
+    return SNew(STableRow<TSharedPtr<FPABTBodyTreeItem>>, Owner)[SNew(STextBlock).Text(Item->Label).ColorAndOpacity(Color)];
+}
+
+void SPhysicsAssetBodyTool::OnBodyTreeSelectionChanged(TSharedPtr<FPABTBodyTreeItem> Item, ESelectInfo::Type)
+{
+    if (Item.IsValid() && !Item->BoneName.IsNone())
+    {
+        SelectedBone = Item->BoneName;
+        RefreshPreviewAndDetails();
+        RefreshLists();
+    }
+}
 
 TSharedPtr<SWidget> SPhysicsAssetBodyTool::BuildBoneContextMenu()
 {
@@ -209,10 +283,10 @@ void SPhysicsAssetBodyTool::RefreshLists()
     if (ValidationList) { ValidationList->ClearChildren(); ValidationList->AddSlot().AutoHeight()[SNew(SButton).Text(LOCTEXT("Validate","Validate Asset")).OnClicked(this,&SPhysicsAssetBodyTool::RunValidation)]; for (const FPABTValidationIssue& I: Issues) ValidationList->AddSlot().AutoHeight()[SNew(STextBlock).Text(I.Message).ColorAndOpacity(I.Severity==FPABTValidationIssue::ESeverity::Error?FLinearColor::Red:FLinearColor::Yellow)]; }
 }
 
-FReply SPhysicsAssetBodyTool::AddPrimitive(EPABTPrimitiveType Type) { if (PhysicsAsset && !SelectedBone.IsNone()) FPABTAssetEditor::AddPrimitive(PhysicsAsset, SelectedBone, Type, 25.f); RefreshPreviewAndDetails(); RefreshLists(); return FReply::Handled(); }
-FReply SPhysicsAssetBodyTool::DeleteSelectedBody() { FPABTAssetEditor::DeleteBody(PhysicsAsset, SelectedBone); RefreshPreviewAndDetails(); RefreshLists(); RebuildBoneTree(); return FReply::Handled(); }
-FReply SPhysicsAssetBodyTool::MirrorSelectedBody() { FName M; if (MirrorSystem.FindMirrorName(SelectedBone, M)) MirrorSystem.MirrorBody(PhysicsAsset, SkeletalMesh, SelectedBone, M, EPABTMirrorAxis::X, false); RefreshPreviewAndDetails(); RefreshLists(); RebuildBoneTree(); return FReply::Handled(); }
-FReply SPhysicsAssetBodyTool::CreateDoorConstraint() { if (SkeletalMesh && PhysicsAsset) { int32 I=SkeletalMesh->GetRefSkeleton().FindBoneIndex(SelectedBone); int32 P= I!=INDEX_NONE ? SkeletalMesh->GetRefSkeleton().GetParentIndex(I) : INDEX_NONE; if (P!=INDEX_NONE) FPABTConstraintSystem::CreateConstraint(PhysicsAsset, SkeletalMesh->GetRefSkeleton().GetBoneName(P), SelectedBone, EPABTHingePreset::VehicleDoor, FVector::UpVector, 0, 70); } RefreshPreviewAndDetails(); RefreshLists(); return FReply::Handled(); }
+FReply SPhysicsAssetBodyTool::AddPrimitive(EPABTPrimitiveType Type) { if (PhysicsAsset && !SelectedBone.IsNone()) FPABTAssetEditor::AddPrimitive(PhysicsAsset, SelectedBone, Type, 25.f); RebuildPhysicsTree(); RefreshPreviewAndDetails(); RefreshLists(); return FReply::Handled(); }
+FReply SPhysicsAssetBodyTool::DeleteSelectedBody() { FPABTAssetEditor::DeleteBody(PhysicsAsset, SelectedBone); RebuildPhysicsTree(); RefreshPreviewAndDetails(); RefreshLists(); RebuildBoneTree(); return FReply::Handled(); }
+FReply SPhysicsAssetBodyTool::MirrorSelectedBody() { FName M; if (MirrorSystem.FindMirrorName(SelectedBone, M)) MirrorSystem.MirrorBody(PhysicsAsset, SkeletalMesh, SelectedBone, M, EPABTMirrorAxis::X, false); RebuildPhysicsTree(); RefreshPreviewAndDetails(); RefreshLists(); RebuildBoneTree(); return FReply::Handled(); }
+FReply SPhysicsAssetBodyTool::CreateDoorConstraint() { if (SkeletalMesh && PhysicsAsset) { int32 I=SkeletalMesh->GetRefSkeleton().FindBoneIndex(SelectedBone); int32 P= I!=INDEX_NONE ? SkeletalMesh->GetRefSkeleton().GetParentIndex(I) : INDEX_NONE; if (P!=INDEX_NONE) FPABTConstraintSystem::CreateConstraint(PhysicsAsset, SkeletalMesh->GetRefSkeleton().GetBoneName(P), SelectedBone, EPABTHingePreset::VehicleDoor, FVector::UpVector, 0, 70); } RebuildPhysicsTree(); RefreshPreviewAndDetails(); RefreshLists(); return FReply::Handled(); }
 FReply SPhysicsAssetBodyTool::RunValidation() { Issues = FPABTValidationSystem::Validate(PhysicsAsset, SkeletalMesh, MirrorSystem); RefreshLists(); return FReply::Handled(); }
 
 #undef LOCTEXT_NAMESPACE
