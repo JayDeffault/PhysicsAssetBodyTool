@@ -55,6 +55,7 @@ private:
     FReply MirrorSelectedBody();
     FReply CreateDoorConstraint();
     FReply RunValidation();
+    FReply OpenNativePhysicsAssetEditor();
     bool BoneFilter(TSharedPtr<FPABTBoneItem> Item) const;
     FText GetSelectionSummaryText() const;
     USkeletalMesh* SkeletalMesh = nullptr;
