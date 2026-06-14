@@ -30,30 +30,61 @@ void SPhysicsAssetBodyTool::Construct(const FArguments& InArgs)
     DetailsArgs.NameAreaSettings = FDetailsViewArgs::HideNameArea;
     DetailsView = PropertyEditor.CreateDetailView(DetailsArgs);
 
-    ChildSlot [ SNew(SVerticalBox)
-        + SVerticalBox::Slot().AutoHeight()[BuildAssetBar()]
-        + SVerticalBox::Slot().AutoHeight()[
-            SNew(SBorder)
-            .Padding(FMargin(8.f, 4.f))
-            [SNew(STextBlock).Text(this, &SPhysicsAssetBodyTool::GetSelectionSummaryText)]
+    ChildSlot
+    [
+        SNew(SSplitter)
+        .Orientation(Orient_Vertical)
+        + SSplitter::Slot()
+        .Value(.18f)
+        .MinSize(96.f)
+        [
+            BuildAssetBar()
         ]
-        + SVerticalBox::Slot().FillHeight(1.f)[ SNew(SSplitter)
-            + SSplitter::Slot().Value(.28f)[ SNew(SSplitter).Orientation(Orient_Vertical)
-                + SSplitter::Slot().Value(.52f)[ SNew(SVerticalBox)
-                    + SVerticalBox::Slot().AutoHeight()[ SNew(STextBlock).Text(LOCTEXT("SkeletonTreeHeader", "Skeleton")) ]
-                    + SVerticalBox::Slot().AutoHeight()[ SAssignNew(SearchBox, SSearchBox).HintText(LOCTEXT("SearchBones", "Search bones")).OnTextChanged_Lambda([this](const FText& T){ SearchText=T.ToString(); RebuildBoneTree(); }) ]
-                    + SVerticalBox::Slot().FillHeight(1.f)[ SAssignNew(BoneTree, STreeView<TSharedPtr<FPABTBoneItem>>).TreeItemsSource(&VisibleRootBones).SelectionMode(ESelectionMode::Multi).OnGenerateRow(this,&SPhysicsAssetBodyTool::MakeBoneRow).OnGetChildren_Lambda([](TSharedPtr<FPABTBoneItem> I,TArray<TSharedPtr<FPABTBoneItem>>& C){ C=I->Children; }).OnSelectionChanged(this,&SPhysicsAssetBodyTool::OnBoneSelectionChanged).OnContextMenuOpening(this,&SPhysicsAssetBodyTool::BuildBoneContextMenu) ]]
-                + SSplitter::Slot().Value(.48f)[ SNew(SVerticalBox)
-                    + SVerticalBox::Slot().AutoHeight()[ SNew(STextBlock).Text(LOCTEXT("PhysicsTreeHeader", "Physics Bodies / Primitives")) ]
-                    + SVerticalBox::Slot().FillHeight(1.f)[ SAssignNew(BodyTree, STreeView<TSharedPtr<FPABTBodyTreeItem>>).TreeItemsSource(&BodyTreeRoots).SelectionMode(ESelectionMode::Single).OnGenerateRow(this,&SPhysicsAssetBodyTool::MakeBodyTreeRow).OnGetChildren_Lambda([](TSharedPtr<FPABTBodyTreeItem> I,TArray<TSharedPtr<FPABTBodyTreeItem>>& C){ C=I->Children; }).OnSelectionChanged(this,&SPhysicsAssetBodyTool::OnBodyTreeSelectionChanged) ]]
+        + SSplitter::Slot()
+        .Value(.82f)
+        .MinSize(260.f)
+        [
+            SNew(SVerticalBox)
+            + SVerticalBox::Slot().AutoHeight()
+            [
+                SNew(SBorder)
+                .Padding(FMargin(8.f, 4.f))
+                [SNew(STextBlock).Text(this, &SPhysicsAssetBodyTool::GetSelectionSummaryText)]
             ]
-            + SSplitter::Slot().Value(.47f)[ SNew(SSplitter).Orientation(Orient_Vertical)
-                + SSplitter::Slot().Value(.62f)[ SAssignNew(ViewportWidget, SPABTViewport).OnPrimitiveSelected(this, &SPhysicsAssetBodyTool::OnViewportPrimitiveSelected) ]
-                + SSplitter::Slot().Value(.38f)[ DetailsView.ToSharedRef() ] ]
-            + SSplitter::Slot().Value(.25f)[ SNew(SSplitter).Orientation(Orient_Vertical)
-                + SSplitter::Slot().Value(.38f)[BuildBodyPanel()]
-                + SSplitter::Slot().Value(.32f)[BuildConstraintPanel()]
-                + SSplitter::Slot().Value(.30f)[BuildValidationPanel()] ]
+            + SVerticalBox::Slot().FillHeight(1.f)
+            [
+                SNew(SSplitter)
+                + SSplitter::Slot().Value(.28f)
+                [
+                    SNew(SSplitter).Orientation(Orient_Vertical)
+                    + SSplitter::Slot().Value(.52f)
+                    [
+                        SNew(SVerticalBox)
+                        + SVerticalBox::Slot().AutoHeight()[ SNew(STextBlock).Text(LOCTEXT("SkeletonTreeHeader", "Skeleton")) ]
+                        + SVerticalBox::Slot().AutoHeight()[ SAssignNew(SearchBox, SSearchBox).HintText(LOCTEXT("SearchBones", "Search bones")).OnTextChanged_Lambda([this](const FText& T){ SearchText=T.ToString(); RebuildBoneTree(); }) ]
+                        + SVerticalBox::Slot().FillHeight(1.f)[ SAssignNew(BoneTree, STreeView<TSharedPtr<FPABTBoneItem>>).TreeItemsSource(&VisibleRootBones).SelectionMode(ESelectionMode::Multi).OnGenerateRow(this,&SPhysicsAssetBodyTool::MakeBoneRow).OnGetChildren_Lambda([](TSharedPtr<FPABTBoneItem> I,TArray<TSharedPtr<FPABTBoneItem>>& C){ C=I->Children; }).OnSelectionChanged(this,&SPhysicsAssetBodyTool::OnBoneSelectionChanged).OnContextMenuOpening(this,&SPhysicsAssetBodyTool::BuildBoneContextMenu) ]
+                    ]
+                    + SSplitter::Slot().Value(.48f)
+                    [
+                        SNew(SVerticalBox)
+                        + SVerticalBox::Slot().AutoHeight()[ SNew(STextBlock).Text(LOCTEXT("PhysicsTreeHeader", "Physics Bodies / Primitives")) ]
+                        + SVerticalBox::Slot().FillHeight(1.f)[ SAssignNew(BodyTree, STreeView<TSharedPtr<FPABTBodyTreeItem>>).TreeItemsSource(&BodyTreeRoots).SelectionMode(ESelectionMode::Single).OnGenerateRow(this,&SPhysicsAssetBodyTool::MakeBodyTreeRow).OnGetChildren_Lambda([](TSharedPtr<FPABTBodyTreeItem> I,TArray<TSharedPtr<FPABTBodyTreeItem>>& C){ C=I->Children; }).OnSelectionChanged(this,&SPhysicsAssetBodyTool::OnBodyTreeSelectionChanged) ]
+                    ]
+                ]
+                + SSplitter::Slot().Value(.47f)
+                [
+                    SNew(SSplitter).Orientation(Orient_Vertical)
+                    + SSplitter::Slot().Value(.62f)[ SAssignNew(ViewportWidget, SPABTViewport).OnPrimitiveSelected(this, &SPhysicsAssetBodyTool::OnViewportPrimitiveSelected) ]
+                    + SSplitter::Slot().Value(.38f)[ DetailsView.ToSharedRef() ]
+                ]
+                + SSplitter::Slot().Value(.25f)
+                [
+                    SNew(SSplitter).Orientation(Orient_Vertical)
+                    + SSplitter::Slot().Value(.38f)[BuildBodyPanel()]
+                    + SSplitter::Slot().Value(.32f)[BuildConstraintPanel()]
+                    + SSplitter::Slot().Value(.30f)[BuildValidationPanel()]
+                ]
+            ]
         ]
     ];
 }
@@ -69,8 +100,18 @@ TSharedRef<SWidget> SPhysicsAssetBodyTool::BuildAssetBar()
         .BodyContent()
         [
             SNew(SHorizontalBox)
-            + SHorizontalBox::Slot().FillWidth(.5f).MaxWidth(420)[SNew(SBox).HeightOverride(72)[CB.Get().CreateAssetPicker(MeshCfg)]]
-            + SHorizontalBox::Slot().FillWidth(.5f).MaxWidth(420)[SNew(SBox).HeightOverride(72)[CB.Get().CreateAssetPicker(PhysCfg)]]
+            + SHorizontalBox::Slot()
+            .FillWidth(.5f)
+            .Padding(0.f, 0.f, 4.f, 0.f)
+            [
+                CB.Get().CreateAssetPicker(MeshCfg)
+            ]
+            + SHorizontalBox::Slot()
+            .FillWidth(.5f)
+            .Padding(4.f, 0.f, 0.f, 0.f)
+            [
+                CB.Get().CreateAssetPicker(PhysCfg)
+            ]
         ];
 }
 
