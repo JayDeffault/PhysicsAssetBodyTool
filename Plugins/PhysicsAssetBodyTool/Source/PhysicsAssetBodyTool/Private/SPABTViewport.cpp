@@ -144,6 +144,35 @@ public:
         FEditorViewportClient::ProcessClick(View, HitProxy, Key, Event, HitX, HitY);
     }
 
+
+    bool InputKey(const FInputKeyEventArgs& EventArgs) override
+    {
+        if (EventArgs.Event == IE_Pressed && Owner)
+        {
+            if (EventArgs.Key == EKeys::W)
+            {
+                Owner->SetWidgetMode(UE::Widget::WM_Translate);
+                return true;
+            }
+            if (EventArgs.Key == EKeys::E)
+            {
+                Owner->SetWidgetMode(UE::Widget::WM_Rotate);
+                return true;
+            }
+            if (EventArgs.Key == EKeys::R)
+            {
+                Owner->SetWidgetMode(UE::Widget::WM_Scale);
+                return true;
+            }
+            if (EventArgs.Key == EKeys::F)
+            {
+                Owner->FocusPreview();
+                return true;
+            }
+        }
+        return FEditorViewportClient::InputKey(EventArgs);
+    }
+
     bool InputWidgetDelta(FViewport* InViewport, EAxisList::Type CurrentAxis, FVector& Drag, FRotator& Rot, FVector& Scale) override
     {
         return Owner ? Owner->ApplySelectedBodyDelta(Drag, Rot, Scale) : false;
@@ -260,10 +289,10 @@ TSharedPtr<SWidget> SPABTViewport::MakeViewportToolbar()
             + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text_Lambda([this](){ return bShowBones ? LOCTEXT("BonesOn", "Bones: On") : LOCTEXT("BonesOff", "Bones: Off"); }).OnClicked(this, &SPABTViewport::ToggleBones)]
             + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text_Lambda([this](){ return bShowFloor ? LOCTEXT("FloorOn", "Floor: On") : LOCTEXT("FloorOff", "Floor: Off"); }).OnClicked(this, &SPABTViewport::ToggleFloor)]
             + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text_Lambda([this](){ return bShowGrid ? LOCTEXT("GridOn", "Grid: On") : LOCTEXT("GridOff", "Grid: Off"); }).OnClicked(this, &SPABTViewport::ToggleGrid)]
-            + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(LOCTEXT("Move", "Move")).OnClicked(this, &SPABTViewport::SetTranslateMode)]
-            + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(LOCTEXT("Rotate", "Rotate")).OnClicked(this, &SPABTViewport::SetRotateMode)]
-            + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(LOCTEXT("Scale", "Scale")).OnClicked(this, &SPABTViewport::SetScaleMode)]
-            + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(LOCTEXT("Focus", "Focus")).OnClicked(this, &SPABTViewport::FocusPreview)]
+            + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(LOCTEXT("Move", "Move (W)")).ToolTipText(LOCTEXT("MoveTooltip", "Translate selected body (W), like the standard editor shortcut.")).OnClicked(this, &SPABTViewport::SetTranslateMode)]
+            + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(LOCTEXT("Rotate", "Rotate (E)")).ToolTipText(LOCTEXT("RotateTooltip", "Rotate selected body (E), like the standard editor shortcut.")).OnClicked(this, &SPABTViewport::SetRotateMode)]
+            + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(LOCTEXT("Scale", "Scale (R)")).ToolTipText(LOCTEXT("ScaleTooltip", "Scale selected body (R), like the standard editor shortcut.")).OnClicked(this, &SPABTViewport::SetScaleMode)]
+            + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(LOCTEXT("Focus", "Focus (F)")).ToolTipText(LOCTEXT("FocusTooltip", "Focus selected preview (F)." )).OnClicked(this, &SPABTViewport::FocusPreview)]
             + SHorizontalBox::Slot().FillWidth(1.f).HAlign(HAlign_Right)[SNew(STextBlock).Text(this, &SPABTViewport::GetStatsText)]
         ];
 }
@@ -282,9 +311,18 @@ FReply SPABTViewport::FocusPreview()
     return FReply::Handled();
 }
 
-FReply SPABTViewport::SetTranslateMode() { WidgetMode = UE::Widget::WM_Translate; if (ViewportClient.IsValid()) ViewportClient->Invalidate(); return FReply::Handled(); }
-FReply SPABTViewport::SetRotateMode() { WidgetMode = UE::Widget::WM_Rotate; if (ViewportClient.IsValid()) ViewportClient->Invalidate(); return FReply::Handled(); }
-FReply SPABTViewport::SetScaleMode() { WidgetMode = UE::Widget::WM_Scale; if (ViewportClient.IsValid()) ViewportClient->Invalidate(); return FReply::Handled(); }
+void SPABTViewport::SetWidgetMode(UE::Widget::EWidgetMode InWidgetMode)
+{
+    WidgetMode = InWidgetMode;
+    if (ViewportClient.IsValid())
+    {
+        ViewportClient->Invalidate();
+    }
+}
+
+FReply SPABTViewport::SetTranslateMode() { SetWidgetMode(UE::Widget::WM_Translate); return FReply::Handled(); }
+FReply SPABTViewport::SetRotateMode() { SetWidgetMode(UE::Widget::WM_Rotate); return FReply::Handled(); }
+FReply SPABTViewport::SetScaleMode() { SetWidgetMode(UE::Widget::WM_Scale); return FReply::Handled(); }
 
 void SPABTViewport::SelectBoneFromViewport(FName InBoneName)
 {

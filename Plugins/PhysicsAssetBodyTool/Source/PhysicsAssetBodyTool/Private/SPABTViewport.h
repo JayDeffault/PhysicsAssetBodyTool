@@ -25,6 +25,8 @@ public:
     void SetSelectedBone(FName InBoneName);
     void SelectBoneFromViewport(FName InBoneName);
     bool ApplySelectedBodyDelta(const FVector& WorldDrag, const FRotator& RotationDelta, const FVector& ScaleDelta);
+    FReply FocusPreview();
+    void SetWidgetMode(UE::Widget::EWidgetMode InWidgetMode);
     USkeletalMeshComponent* GetPreviewComponent() const { return PreviewComponent; }
     UPhysicsAsset* GetPhysicsAsset() const { return PhysicsAsset.Get(); }
     FName GetSelectedBone() const { return SelectedBone; }
@@ -40,7 +42,6 @@ private:
     FReply ToggleBones();
     FReply ToggleFloor();
     FReply ToggleGrid();
-    FReply FocusPreview();
     FReply SetTranslateMode();
     FReply SetRotateMode();
     FReply SetScaleMode();
