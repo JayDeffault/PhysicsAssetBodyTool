@@ -356,6 +356,7 @@ TSharedRef<FEditorViewportClient> SPABTViewport::MakeEditorViewportClient()
     ViewportClient = MakeShared<FPABTViewportClient>(PreviewScene.Get(), SharedThis(this), this);
     ViewportClient->SetViewMode(VMI_Lit);
     ViewportClient->SetRealtime(true);
+    ViewportClient->SetWidgetCoordSystemSpace(COORD_Local);
     ViewportClient->bSetListenerPosition = false;
     ApplyShowFlags();
     return ViewportClient.ToSharedRef();
@@ -419,6 +420,9 @@ void SPABTViewport::SetWidgetMode(UE::Widget::EWidgetMode InWidgetMode)
     WidgetMode = InWidgetMode;
     if (ViewportClient.IsValid())
     {
+        // Keep transform widgets in local space by default, matching the requested PHAT-style
+        // body rotation workflow where the rotate gizmo follows the selected primitive/bone.
+        ViewportClient->SetWidgetCoordSystemSpace(COORD_Local);
         ViewportClient->Invalidate();
     }
 }
