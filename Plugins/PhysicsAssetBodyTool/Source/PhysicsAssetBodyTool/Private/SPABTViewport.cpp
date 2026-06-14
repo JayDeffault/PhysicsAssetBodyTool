@@ -175,7 +175,11 @@ public:
 
     bool InputWidgetDelta(FViewport* InViewport, EAxisList::Type CurrentAxis, FVector& Drag, FRotator& Rot, FVector& Scale) override
     {
-        return Owner ? Owner->ApplySelectedBodyDelta(Drag, Rot, Scale) : false;
+        if (!Owner || !InViewport || CurrentAxis == EAxisList::None || !InViewport->KeyState(EKeys::LeftMouseButton))
+        {
+            return false;
+        }
+        return Owner->ApplySelectedBodyDelta(Drag, Rot, Scale);
     }
 
     FVector GetWidgetLocation() const override
@@ -365,12 +369,16 @@ bool SPABTViewport::ApplySelectedBodyDelta(const FVector& WorldDrag, const FRota
     Asset->Modify();
     Setup->Modify();
     const FTransform BoneTM = PreviewComponent->GetBoneTransform(BoneIndex);
-    const FVector LocalDrag = BoneTM.InverseTransformVectorNoScale(WorldDrag);
-    const FQuat LocalRot = BoneTM.InverseTransformRotation(RotationDelta.Quaternion());
-    const FVector SafeScale = FVector(
+    const bool bTranslateMode = WidgetMode == UE::Widget::WM_Translate;
+    const bool bRotateMode = WidgetMode == UE::Widget::WM_Rotate;
+    const bool bScaleMode = WidgetMode == UE::Widget::WM_Scale;
+
+    const FVector LocalDrag = bTranslateMode ? BoneTM.InverseTransformVectorNoScale(WorldDrag) : FVector::ZeroVector;
+    const FQuat LocalRot = bRotateMode ? BoneTM.InverseTransformRotation(RotationDelta.Quaternion()) : FQuat::Identity;
+    const FVector SafeScale = bScaleMode ? FVector(
         FMath::IsNearlyZero(ScaleDelta.X) ? 1.f : ScaleDelta.X,
         FMath::IsNearlyZero(ScaleDelta.Y) ? 1.f : ScaleDelta.Y,
-        FMath::IsNearlyZero(ScaleDelta.Z) ? 1.f : ScaleDelta.Z);
+        FMath::IsNearlyZero(ScaleDelta.Z) ? 1.f : ScaleDelta.Z) : FVector::OneVector;
 
     auto ApplyDelta = [&](auto& Elem)
     {
