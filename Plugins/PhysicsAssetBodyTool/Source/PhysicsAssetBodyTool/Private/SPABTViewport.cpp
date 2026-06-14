@@ -175,14 +175,18 @@ public:
         }
         if (EventArgs.Event == IE_Pressed && Owner && EventArgs.Key == EKeys::LeftMouseButton && EventArgs.Viewport)
         {
-            if (HHitProxy* HitProxy = EventArgs.Viewport->GetHitProxy(EventArgs.Viewport->GetMouseX(), EventArgs.Viewport->GetMouseY()))
+            HHitProxy* HitProxy = EventArgs.Viewport->GetHitProxy(EventArgs.Viewport->GetMouseX(), EventArgs.Viewport->GetMouseY());
+            if (HitProxy && HitProxy->IsA(HPABTPrimitiveProxy::StaticGetType()))
             {
-                if (HitProxy->IsA(HPABTPrimitiveProxy::StaticGetType()))
-                {
-                    HPABTPrimitiveProxy* PrimitiveProxy = static_cast<HPABTPrimitiveProxy*>(HitProxy);
-                    Owner->SetSelectedPrimitive(PrimitiveProxy->BoneName, PrimitiveProxy->PrimitiveType, PrimitiveProxy->PrimitiveIndex);
-                    return true;
-                }
+                HPABTPrimitiveProxy* PrimitiveProxy = static_cast<HPABTPrimitiveProxy*>(HitProxy);
+                Owner->SetSelectedPrimitive(PrimitiveProxy->BoneName, PrimitiveProxy->PrimitiveType, PrimitiveProxy->PrimitiveIndex);
+                return true;
+            }
+            if (!HitProxy)
+            {
+                // Empty-space LMB should not enter the editor viewport's mouse-capture path;
+                // that path hides the cursor until another mouse button releases capture.
+                return true;
             }
         }
         if (EventArgs.Event == IE_Pressed && Owner)
