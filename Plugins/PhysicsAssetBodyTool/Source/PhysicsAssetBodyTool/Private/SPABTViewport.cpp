@@ -170,7 +170,6 @@ public:
     {
         if (EventArgs.Event == IE_Released && Owner && EventArgs.Key == EKeys::LeftMouseButton)
         {
-            bHasLastMousePosition = false;
             Owner->FinalizeSelectedBodyPhysics();
             return true;
         }
@@ -204,60 +203,13 @@ public:
     {
         if (!Owner || !InViewport || CurrentAxis == EAxisList::None || !InViewport->KeyState(EKeys::LeftMouseButton))
         {
-            bHasLastMousePosition = false;
             return false;
         }
 
-        FVector EffectiveDrag = Drag;
-        if (Owner->GetActiveWidgetMode() == UE::Widget::WM_Translate)
-        {
-            const FIntPoint CurrentMousePosition(InViewport->GetMouseX(), InViewport->GetMouseY());
-            if (!bHasLastMousePosition)
-            {
-                LastMousePosition = CurrentMousePosition;
-                bHasLastMousePosition = true;
-                return false;
-            }
-
-            const FVector2D MouseDelta(
-                static_cast<float>(CurrentMousePosition.X - LastMousePosition.X),
-                static_cast<float>(CurrentMousePosition.Y - LastMousePosition.Y));
-            LastMousePosition = CurrentMousePosition;
-
-            const FRotationMatrix ViewRotationMatrix(GetViewRotation());
-            const FVector ViewRight = ViewRotationMatrix.GetScaledAxis(EAxis::Y);
-            const FVector ViewUp = ViewRotationMatrix.GetScaledAxis(EAxis::Z);
-
-            auto HasAxis = [CurrentAxis](EAxisList::Type Axis)
-            {
-                return (CurrentAxis & Axis) != EAxisList::None;
-            };
-            auto AccumulateAxisDrag = [&](const FVector& WorldAxis, FVector& InOutDrag)
-            {
-                FVector2D ScreenAxis(FVector::DotProduct(WorldAxis, ViewRight), -FVector::DotProduct(WorldAxis, ViewUp));
-                if (!ScreenAxis.Normalize())
-                {
-                    return;
-                }
-                constexpr float ScreenDragSensitivity = 4.f;
-                InOutDrag += WorldAxis * FVector2D::DotProduct(MouseDelta, ScreenAxis) * ScreenDragSensitivity;
-            };
-
-            EffectiveDrag = FVector::ZeroVector;
-            USkeletalMeshComponent* Component = Owner->GetPreviewComponent();
-            const int32 BoneIndex = Component ? Component->GetBoneIndex(Owner->GetSelectedBone()) : INDEX_NONE;
-            const FTransform AxisTransform = BoneIndex != INDEX_NONE ? Component->GetBoneTransform(BoneIndex) : FTransform::Identity;
-            if (HasAxis(EAxisList::X)) AccumulateAxisDrag(AxisTransform.GetUnitAxis(EAxis::X), EffectiveDrag);
-            if (HasAxis(EAxisList::Y)) AccumulateAxisDrag(AxisTransform.GetUnitAxis(EAxis::Y), EffectiveDrag);
-            if (HasAxis(EAxisList::Z)) AccumulateAxisDrag(AxisTransform.GetUnitAxis(EAxis::Z), EffectiveDrag);
-
-            if (EffectiveDrag.IsNearlyZero())
-            {
-                EffectiveDrag = Drag;
-            }
-        }
-
-        return Owner->ApplySelectedBodyDelta(EffectiveDrag, Rot, Scale, CurrentAxis);
+        // Use the same widget delta that FEditorViewportClient produces for UE editor gizmos.
+        // Do not reinterpret mouse movement here; the viewport widget system already handles
+        // axis picking, camera orientation, and screen-space drag behavior.
+        return Owner->ApplySelectedBodyDelta(Drag, Rot, Scale, CurrentAxis);
     }
 
     FVector GetWidgetLocation() const override
@@ -282,8 +234,6 @@ public:
 
 private:
     SPABTViewport* Owner = nullptr;
-    FIntPoint LastMousePosition = FIntPoint::ZeroValue;
-    bool bHasLastMousePosition = false;
 };
 }
 
@@ -481,18 +431,7 @@ bool SPABTViewport::ApplySelectedBodyDelta(const FVector& WorldDrag, const FRota
         AxisMask = FVector::OneVector;
     }
 
-    FVector WorldConstrainedDrag = FVector::ZeroVector;
-    if (bTranslateMode)
-    {
-        // FEditorViewportClient already converts the active widget axis drag into a
-        // world-space constrained delta. Applying an additional camera-dependent
-        // projection here makes users drag exactly along the arrow and can flip
-        // direction when the view changes. Keep the engine-provided constrained
-        // delta and only dampen it for physics-body authoring precision.
-        constexpr float TranslationSensitivity = 0.05f;
-        WorldConstrainedDrag = WorldDrag * TranslationSensitivity;
-    }
-
+    const FVector WorldConstrainedDrag = bTranslateMode ? WorldDrag : FVector::ZeroVector;
     const FVector LocalDrag = BoneTM.InverseTransformVectorNoScale(WorldConstrainedDrag);
     const FQuat LocalRot = bRotateMode ? BoneTM.InverseTransformRotation(RotationDelta.Quaternion()) : FQuat::Identity;
 
