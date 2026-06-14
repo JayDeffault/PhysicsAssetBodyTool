@@ -18,7 +18,11 @@ void FPhysicsAssetBodyToolModule::StartupModule()
 
 void FPhysicsAssetBodyToolModule::ShutdownModule()
 {
-    if (UToolMenus::IsToolMenusAvailable()) UToolMenus::UnRegisterStartupCallback(ToolMenusHandle);
+    if (ToolMenusHandle.IsValid())
+    {
+        UToolMenus::UnRegisterStartupCallback(ToolMenusHandle);
+        ToolMenusHandle.Reset();
+    }
     FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(PhysicsAssetBodyToolTabName);
 }
 
