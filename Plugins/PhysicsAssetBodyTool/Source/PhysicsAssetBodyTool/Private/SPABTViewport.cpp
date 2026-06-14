@@ -356,7 +356,7 @@ TSharedRef<FEditorViewportClient> SPABTViewport::MakeEditorViewportClient()
     ViewportClient = MakeShared<FPABTViewportClient>(PreviewScene.Get(), SharedThis(this), this);
     ViewportClient->SetViewMode(VMI_Lit);
     ViewportClient->SetRealtime(true);
-    ViewportClient->SetWidgetCoordSystemSpace(COORD_Local);
+    ApplyWidgetCoordSystem();
     ViewportClient->bSetListenerPosition = false;
     ApplyShowFlags();
     return ViewportClient.ToSharedRef();
@@ -396,6 +396,10 @@ TSharedPtr<SWidget> SPABTViewport::MakeViewportToolbar()
             + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(LOCTEXT("Move", "Move (W)")).ToolTipText(LOCTEXT("MoveTooltip", "Translate selected body (W), like the standard editor shortcut.")).OnClicked(this, &SPABTViewport::SetTranslateMode)]
             + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(LOCTEXT("Rotate", "Rotate (E)")).ToolTipText(LOCTEXT("RotateTooltip", "Rotate selected body (E), like the standard editor shortcut.")).OnClicked(this, &SPABTViewport::SetRotateMode)]
             + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(LOCTEXT("Scale", "Scale (R)")).ToolTipText(LOCTEXT("ScaleTooltip", "Scale selected body (R), like the standard editor shortcut.")).OnClicked(this, &SPABTViewport::SetScaleMode)]
+            + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(this, &SPABTViewport::GetWidgetSpaceText).ToolTipText(LOCTEXT("WidgetSpaceTooltip", "Toggle gizmo coordinate space between Local and World.")).OnClicked(this, &SPABTViewport::ToggleWidgetSpace)]
+            + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(this, &SPABTViewport::GetTranslateSnapText).ToolTipText(LOCTEXT("TranslateSnapTooltip", "Toggle 5 cm move snapping for selected physics primitives.")).OnClicked(this, &SPABTViewport::ToggleTranslateSnap)]
+            + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(this, &SPABTViewport::GetRotateSnapText).ToolTipText(LOCTEXT("RotateSnapTooltip", "Toggle 5 degree rotation snapping for selected physics primitives.")).OnClicked(this, &SPABTViewport::ToggleRotateSnap)]
+            + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(this, &SPABTViewport::GetScaleSnapText).ToolTipText(LOCTEXT("ScaleSnapTooltip", "Toggle 1 cm size snapping for selected physics primitives.")).OnClicked(this, &SPABTViewport::ToggleScaleSnap)]
             + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(LOCTEXT("Focus", "Focus (F)")).ToolTipText(LOCTEXT("FocusTooltip", "Focus selected preview (F)." )).OnClicked(this, &SPABTViewport::FocusPreview)]
             + SHorizontalBox::Slot().FillWidth(1.f).HAlign(HAlign_Right)[SNew(STextBlock).Text(this, &SPABTViewport::GetStatsText)]
         ];
@@ -415,14 +419,20 @@ FReply SPABTViewport::FocusPreview()
     return FReply::Handled();
 }
 
+void SPABTViewport::ApplyWidgetCoordSystem()
+{
+    if (ViewportClient.IsValid())
+    {
+        ViewportClient->SetWidgetCoordSystemSpace(bUseLocalWidgetSpace ? COORD_Local : COORD_World);
+    }
+}
+
 void SPABTViewport::SetWidgetMode(UE::Widget::EWidgetMode InWidgetMode)
 {
     WidgetMode = InWidgetMode;
     if (ViewportClient.IsValid())
     {
-        // Keep transform widgets in local space by default, matching the requested PHAT-style
-        // body rotation workflow where the rotate gizmo follows the selected primitive/bone.
-        ViewportClient->SetWidgetCoordSystemSpace(COORD_Local);
+        ApplyWidgetCoordSystem();
         ViewportClient->Invalidate();
     }
 }
@@ -430,6 +440,14 @@ void SPABTViewport::SetWidgetMode(UE::Widget::EWidgetMode InWidgetMode)
 FReply SPABTViewport::SetTranslateMode() { SetWidgetMode(UE::Widget::WM_Translate); return FReply::Handled(); }
 FReply SPABTViewport::SetRotateMode() { SetWidgetMode(UE::Widget::WM_Rotate); return FReply::Handled(); }
 FReply SPABTViewport::SetScaleMode() { SetWidgetMode(UE::Widget::WM_Scale); return FReply::Handled(); }
+FReply SPABTViewport::ToggleWidgetSpace() { bUseLocalWidgetSpace = !bUseLocalWidgetSpace; ApplyWidgetCoordSystem(); if (ViewportClient.IsValid()) ViewportClient->Invalidate(); return FReply::Handled(); }
+FReply SPABTViewport::ToggleTranslateSnap() { bSnapTranslation = !bSnapTranslation; return FReply::Handled(); }
+FReply SPABTViewport::ToggleRotateSnap() { bSnapRotation = !bSnapRotation; return FReply::Handled(); }
+FReply SPABTViewport::ToggleScaleSnap() { bSnapScale = !bSnapScale; return FReply::Handled(); }
+FText SPABTViewport::GetWidgetSpaceText() const { return bUseLocalWidgetSpace ? LOCTEXT("WidgetSpaceLocal", "Local") : LOCTEXT("WidgetSpaceWorld", "World"); }
+FText SPABTViewport::GetTranslateSnapText() const { return bSnapTranslation ? LOCTEXT("MoveSnapOn", "Move Snap: On") : LOCTEXT("MoveSnapOff", "Move Snap: Off"); }
+FText SPABTViewport::GetRotateSnapText() const { return bSnapRotation ? LOCTEXT("RotateSnapOn", "Rot Snap: On") : LOCTEXT("RotateSnapOff", "Rot Snap: Off"); }
+FText SPABTViewport::GetScaleSnapText() const { return bSnapScale ? LOCTEXT("ScaleSnapOn", "Scale Snap: On") : LOCTEXT("ScaleSnapOff", "Scale Snap: Off"); }
 
 void SPABTViewport::SelectBoneFromViewport(FName InBoneName)
 {
@@ -534,6 +552,21 @@ bool SPABTViewport::ApplySelectedBodyDelta(const FVector& WorldDrag, const FRota
         FTransform TM = Elem.GetTransform();
         TM.AddToTranslation(LocalDrag);
         TM.ConcatenateRotation(LocalRot);
+        if (bSnapTranslation && bTranslateMode)
+        {
+            TM.SetTranslation(FVector(
+                FMath::GridSnap(TM.GetTranslation().X, 5.f),
+                FMath::GridSnap(TM.GetTranslation().Y, 5.f),
+                FMath::GridSnap(TM.GetTranslation().Z, 5.f)));
+        }
+        if (bSnapRotation && bRotateMode)
+        {
+            FRotator SnappedRotation = TM.Rotator();
+            SnappedRotation.Roll = FMath::GridSnap(SnappedRotation.Roll, 5.f);
+            SnappedRotation.Pitch = FMath::GridSnap(SnappedRotation.Pitch, 5.f);
+            SnappedRotation.Yaw = FMath::GridSnap(SnappedRotation.Yaw, 5.f);
+            TM.SetRotation(SnappedRotation.Quaternion());
+        }
         TM.NormalizeRotation();
         Elem.SetTransform(TM);
     };
@@ -554,6 +587,12 @@ bool SPABTViewport::ApplySelectedBodyDelta(const FVector& WorldDrag, const FRota
             Elem.X = FMath::Max(0.1f, Elem.X * (1.f + ScaleAxisDelta.X));
             Elem.Y = FMath::Max(0.1f, Elem.Y * (1.f + ScaleAxisDelta.Y));
             Elem.Z = FMath::Max(0.1f, Elem.Z * (1.f + ScaleAxisDelta.Z));
+            if (bSnapScale)
+            {
+                Elem.X = FMath::GridSnap(Elem.X, 1.f);
+                Elem.Y = FMath::GridSnap(Elem.Y, 1.f);
+                Elem.Z = FMath::GridSnap(Elem.Z, 1.f);
+            }
         }
     }
     for (int32 Index = 0; Index < Setup->AggGeom.SphereElems.Num(); ++Index)
@@ -564,6 +603,10 @@ bool SPABTViewport::ApplySelectedBodyDelta(const FVector& WorldDrag, const FRota
         if (bScaleMode)
         {
             Elem.Radius = FMath::Max(0.1f, Elem.Radius * (1.f + ScaleAxisDelta.GetAbsMax()));
+            if (bSnapScale)
+            {
+                Elem.Radius = FMath::GridSnap(Elem.Radius, 1.f);
+            }
         }
     }
     for (int32 Index = 0; Index < Setup->AggGeom.SphylElems.Num(); ++Index)
@@ -575,6 +618,11 @@ bool SPABTViewport::ApplySelectedBodyDelta(const FVector& WorldDrag, const FRota
         {
             Elem.Radius = FMath::Max(0.1f, Elem.Radius * (1.f + FMath::Max(FMath::Abs(ScaleAxisDelta.X), FMath::Abs(ScaleAxisDelta.Y))));
             Elem.Length = FMath::Max(0.1f, Elem.Length * (1.f + ScaleAxisDelta.Z));
+            if (bSnapScale)
+            {
+                Elem.Radius = FMath::GridSnap(Elem.Radius, 1.f);
+                Elem.Length = FMath::GridSnap(Elem.Length, 1.f);
+            }
         }
     }
     for (int32 Index = 0; Index < Setup->AggGeom.ConvexElems.Num(); ++Index)
@@ -585,7 +633,14 @@ bool SPABTViewport::ApplySelectedBodyDelta(const FVector& WorldDrag, const FRota
         if (bScaleMode)
         {
             FTransform TM = Elem.GetTransform();
-            TM.SetScale3D(TM.GetScale3D() * (FVector::OneVector + ScaleAxisDelta));
+            FVector NewScale = TM.GetScale3D() * (FVector::OneVector + ScaleAxisDelta);
+            if (bSnapScale)
+            {
+                NewScale.X = FMath::GridSnap(NewScale.X, 0.1f);
+                NewScale.Y = FMath::GridSnap(NewScale.Y, 0.1f);
+                NewScale.Z = FMath::GridSnap(NewScale.Z, 0.1f);
+            }
+            TM.SetScale3D(NewScale);
             Elem.SetTransform(TM);
         }
         Elem.UpdateElemBox();

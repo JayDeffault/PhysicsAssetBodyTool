@@ -31,6 +31,7 @@ public:
     void FinalizeSelectedBodyPhysics();
     FReply FocusPreview();
     void SetWidgetMode(UE::Widget::EWidgetMode InWidgetMode);
+    bool IsUsingLocalWidgetSpace() const { return bUseLocalWidgetSpace; }
     USkeletalMeshComponent* GetPreviewComponent() const { return PreviewComponent; }
     UPhysicsAsset* GetPhysicsAsset() const { return PhysicsAsset.Get(); }
     FName GetSelectedBone() const { return SelectedBone; }
@@ -52,6 +53,15 @@ private:
     FReply SetTranslateMode();
     FReply SetRotateMode();
     FReply SetScaleMode();
+    FReply ToggleWidgetSpace();
+    FReply ToggleTranslateSnap();
+    FReply ToggleRotateSnap();
+    FReply ToggleScaleSnap();
+    FText GetWidgetSpaceText() const;
+    FText GetTranslateSnapText() const;
+    FText GetRotateSnapText() const;
+    FText GetScaleSnapText() const;
+    void ApplyWidgetCoordSystem();
     FText GetStatsText() const;
 
     TSharedPtr<FAdvancedPreviewScene> PreviewScene;
@@ -65,6 +75,10 @@ private:
     bool bShowBones = false;
     bool bShowFloor = false;
     bool bShowGrid = true;
+    bool bUseLocalWidgetSpace = true;
+    bool bSnapTranslation = false;
+    bool bSnapRotation = false;
+    bool bSnapScale = false;
     FPABTOnViewportPrimitiveSelected OnPrimitiveSelected;
     UE::Widget::EWidgetMode WidgetMode = UE::Widget::WM_Translate;
 };
