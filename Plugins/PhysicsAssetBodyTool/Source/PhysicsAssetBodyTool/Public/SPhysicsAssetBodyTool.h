@@ -4,6 +4,7 @@
 #include "PhysicsAssetBodyToolSubsystems.h"
 
 class IDetailsView;
+class SPABTViewport;
 class SSearchBox;
 class UPhysicsAsset;
 class USkeletalMesh;
@@ -24,6 +25,7 @@ private:
     void SetPhysicsAsset(const FAssetData& Data);
     void RebuildBoneTree();
     void RefreshLists();
+    void RefreshPreviewAndDetails();
     TSharedRef<ITableRow> MakeBoneRow(TSharedPtr<FPABTBoneItem> Item, const TSharedRef<STableViewBase>& Owner);
     void OnBoneSelectionChanged(TSharedPtr<FPABTBoneItem> Item, ESelectInfo::Type SelectInfo);
     TSharedRef<SWidget> BuildAssetBar();
@@ -46,6 +48,8 @@ private:
     TSharedPtr<SVerticalBox> BodyList;
     TSharedPtr<SVerticalBox> ConstraintList;
     TSharedPtr<SVerticalBox> ValidationList;
+    TSharedPtr<IDetailsView> DetailsView;
+    TSharedPtr<SPABTViewport> ViewportWidget;
     TSharedPtr<SSearchBox> SearchBox;
     FString SearchText;
     FPABTMirrorSystem MirrorSystem;
