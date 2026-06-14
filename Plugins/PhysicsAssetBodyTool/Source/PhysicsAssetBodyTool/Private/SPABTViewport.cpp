@@ -173,6 +173,18 @@ public:
             Owner->FinalizeSelectedBodyPhysics();
             return true;
         }
+        if (EventArgs.Event == IE_Pressed && Owner && EventArgs.Key == EKeys::LeftMouseButton && EventArgs.Viewport)
+        {
+            if (HHitProxy* HitProxy = EventArgs.Viewport->GetHitProxy(EventArgs.Viewport->GetMouseX(), EventArgs.Viewport->GetMouseY()))
+            {
+                if (HitProxy->IsA(HPABTPrimitiveProxy::StaticGetType()))
+                {
+                    HPABTPrimitiveProxy* PrimitiveProxy = static_cast<HPABTPrimitiveProxy*>(HitProxy);
+                    Owner->SetSelectedPrimitive(PrimitiveProxy->BoneName, PrimitiveProxy->PrimitiveType, PrimitiveProxy->PrimitiveIndex);
+                    return true;
+                }
+            }
+        }
         if (EventArgs.Event == IE_Pressed && Owner)
         {
             if (EventArgs.Key == EKeys::W)
@@ -265,6 +277,10 @@ void SPABTViewport::SetPreviewAssets(USkeletalMesh* InSkeletalMesh, UPhysicsAsse
     {
         ViewportClient->FocusViewportOnBox(PreviewComponent ? PreviewComponent->Bounds.GetBox() : FBox(EForceInit::ForceInit));
         ViewportClient->Invalidate();
+        if (ViewportClient->Viewport)
+        {
+            ViewportClient->Viewport->InvalidateHitProxy();
+        }
     }
 }
 
