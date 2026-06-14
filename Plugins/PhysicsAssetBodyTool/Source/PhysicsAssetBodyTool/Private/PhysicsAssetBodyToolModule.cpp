@@ -2,8 +2,7 @@
 #include "SPhysicsAssetBodyTool.h"
 #include "ToolMenus.h"
 #include "Widgets/Docking/SDockTab.h"
-#include "WorkspaceMenuStructure.h"
-#include "WorkspaceMenuStructureModule.h"
+#include "Styling/AppStyle.h"
 
 #define LOCTEXT_NAMESPACE "PhysicsAssetBodyTool"
 static const FName PhysicsAssetBodyToolTabName("PhysicsAssetBodyTool");
@@ -13,7 +12,6 @@ void FPhysicsAssetBodyToolModule::StartupModule()
     FGlobalTabmanager::Get()->RegisterNomadTabSpawner(PhysicsAssetBodyToolTabName, FOnSpawnTab::CreateRaw(this, &FPhysicsAssetBodyToolModule::SpawnToolTab))
         .SetDisplayName(LOCTEXT("TabTitle", "Physics Asset Body Tool"))
         .SetTooltipText(LOCTEXT("Tooltip", "Open the Physics Asset Body Tool editor."))
-        .SetGroup(WorkspaceMenu::GetMenuStructure().GetDeveloperToolsMiscCategory())
         .SetIcon(FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.Details"));
     ToolMenusHandle = UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FPhysicsAssetBodyToolModule::RegisterMenus));
 }

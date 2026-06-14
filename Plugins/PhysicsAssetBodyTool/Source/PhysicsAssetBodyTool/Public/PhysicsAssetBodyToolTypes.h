@@ -1,6 +1,10 @@
 #pragma once
 #include "CoreMinimal.h"
 #include "PhysicsEngine/ConstraintInstance.h"
+#include "PhysicsEngine/BoxElem.h"
+#include "PhysicsEngine/SphereElem.h"
+#include "PhysicsEngine/SphylElem.h"
+#include "PhysicsEngine/ConvexElem.h"
 
 enum class EPABTPrimitiveType : uint8 { Box, Sphere, Capsule, Convex };
 enum class EPABTMirrorAxis : uint8 { X, Y, Z };
