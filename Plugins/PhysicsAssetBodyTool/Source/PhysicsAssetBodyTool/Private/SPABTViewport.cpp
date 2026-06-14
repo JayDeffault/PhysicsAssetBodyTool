@@ -170,8 +170,12 @@ public:
     {
         if (EventArgs.Event == IE_Released && Owner && EventArgs.Key == EKeys::LeftMouseButton)
         {
+            // Let the base editor viewport see LMB release so it can end widget dragging
+            // and release mouse capture. Swallowing this release leaves the cursor hidden
+            // until another mouse button forces capture cleanup.
+            const bool bBaseHandled = FEditorViewportClient::InputKey(EventArgs);
             Owner->FinalizeSelectedBodyPhysics();
-            return true;
+            return bBaseHandled;
         }
         if (EventArgs.Event == IE_Pressed && Owner && EventArgs.Key == EKeys::LeftMouseButton && EventArgs.Viewport)
         {
