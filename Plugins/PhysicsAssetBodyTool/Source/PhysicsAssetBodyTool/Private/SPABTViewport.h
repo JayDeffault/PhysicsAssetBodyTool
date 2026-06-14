@@ -28,6 +28,7 @@ public:
     void SetSelectedPrimitive(FName InBoneName, EPABTViewportPrimitiveType InPrimitiveType, int32 InPrimitiveIndex);
     void SelectBoneFromViewport(FName InBoneName);
     bool ApplySelectedBodyDelta(const FVector& WorldDrag, const FRotator& RotationDelta, const FVector& ScaleDelta, EAxisList::Type CurrentAxis);
+    void FinalizeSelectedBodyPhysics();
     FReply FocusPreview();
     void SetWidgetMode(UE::Widget::EWidgetMode InWidgetMode);
     USkeletalMeshComponent* GetPreviewComponent() const { return PreviewComponent; }

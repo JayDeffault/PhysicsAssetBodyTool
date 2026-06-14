@@ -168,6 +168,11 @@ public:
 
     bool InputKey(const FInputKeyEventArgs& EventArgs) override
     {
+        if (EventArgs.Event == IE_Released && Owner && EventArgs.Key == EKeys::LeftMouseButton)
+        {
+            Owner->FinalizeSelectedBodyPhysics();
+            return true;
+        }
         if (EventArgs.Event == IE_Pressed && Owner)
         {
             if (EventArgs.Key == EKeys::W)
@@ -510,15 +515,34 @@ bool SPABTViewport::ApplySelectedBodyDelta(const FVector& WorldDrag, const FRota
         Elem.UpdateElemBox();
     }
 
-    Setup->InvalidatePhysicsData();
-    Setup->CreatePhysicsMeshes();
-    Asset->UpdateBodySetupIndexMap();
     Asset->MarkPackageDirty();
     if (ViewportClient.IsValid())
     {
         ViewportClient->Invalidate();
     }
     return true;
+}
+
+void SPABTViewport::FinalizeSelectedBodyPhysics()
+{
+    UPhysicsAsset* Asset = PhysicsAsset.Get();
+    if (!Asset || SelectedBone.IsNone())
+    {
+        return;
+    }
+
+    for (USkeletalBodySetup* Setup : Asset->SkeletalBodySetups)
+    {
+        if (Setup && Setup->BoneName == SelectedBone)
+        {
+            Setup->Modify();
+            Setup->InvalidatePhysicsData();
+            Setup->CreatePhysicsMeshes();
+            Asset->UpdateBodySetupIndexMap();
+            Asset->MarkPackageDirty();
+            break;
+        }
+    }
 }
 
 FText SPABTViewport::GetStatsText() const
