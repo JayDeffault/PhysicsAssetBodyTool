@@ -123,9 +123,9 @@ public:
             {
                 const FVector A = Component->GetBoneTransform(Bone1).TransformPosition(Constraint->DefaultInstance.Pos1);
                 const FVector B = Component->GetBoneTransform(Bone2).TransformPosition(Constraint->DefaultInstance.Pos2);
-                PDI->DrawLine(A, B, FLinearColor::Magenta, SDPG_Foreground, 2.f);
-                DrawWireSphere(PDI, A, FColor::Magenta, 4.f, 8, SDPG_Foreground);
-                DrawWireSphere(PDI, B, FColor::Magenta, 4.f, 8, SDPG_Foreground);
+                PDI->DrawLine(A, B, FLinearColor(1.f, 0.f, 1.f, 1.f), SDPG_Foreground, 2.f);
+                DrawWireSphere(PDI, A, FColor(255, 0, 255), 4.f, 8, SDPG_Foreground);
+                DrawWireSphere(PDI, B, FColor(255, 0, 255), 4.f, 8, SDPG_Foreground);
             }
         }
     }
@@ -193,7 +193,7 @@ public:
         return Owner ? Owner->GetActiveWidgetMode() : UE::Widget::WM_None;
     }
 
-    bool UsesTransformWidget() const override
+    bool UsesTransformWidget() const
     {
         return Owner && !Owner->GetSelectedBone().IsNone();
     }
