@@ -390,14 +390,13 @@ bool SPABTViewport::ApplySelectedBodyDelta(const FVector& WorldDrag, const FRota
     FVector WorldConstrainedDrag = FVector::ZeroVector;
     if (bTranslateMode)
     {
-        constexpr float TranslationSensitivity = 0.25f;
-        const FVector AxisX = BoneTM.GetUnitAxis(EAxis::X);
-        const FVector AxisY = BoneTM.GetUnitAxis(EAxis::Y);
-        const FVector AxisZ = BoneTM.GetUnitAxis(EAxis::Z);
-        WorldConstrainedDrag += AxisX * FVector::DotProduct(WorldDrag, AxisX) * AxisMask.X;
-        WorldConstrainedDrag += AxisY * FVector::DotProduct(WorldDrag, AxisY) * AxisMask.Y;
-        WorldConstrainedDrag += AxisZ * FVector::DotProduct(WorldDrag, AxisZ) * AxisMask.Z;
-        WorldConstrainedDrag *= TranslationSensitivity;
+        // FEditorViewportClient already converts the active widget axis drag into a
+        // world-space constrained delta. Applying an additional camera-dependent
+        // projection here makes users drag exactly along the arrow and can flip
+        // direction when the view changes. Keep the engine-provided constrained
+        // delta and only dampen it for physics-body authoring precision.
+        constexpr float TranslationSensitivity = 0.05f;
+        WorldConstrainedDrag = WorldDrag * TranslationSensitivity;
     }
 
     const FVector LocalDrag = BoneTM.InverseTransformVectorNoScale(WorldConstrainedDrag);
