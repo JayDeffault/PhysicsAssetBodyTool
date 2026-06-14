@@ -8,6 +8,8 @@
 #include "PhysicsEngine/SkeletalBodySetup.h"
 #include "PhysicsEngine/PhysicsConstraintTemplate.h"
 #include "SceneManagement.h"
+#include "HitProxies.h"
+#include "ScopedTransaction.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SSpacer.h"
@@ -16,6 +18,19 @@
 #include "Styling/AppStyle.h"
 
 #define LOCTEXT_NAMESPACE "PhysicsAssetBodyToolViewport"
+
+
+struct HPABTBodyProxy final : public HHitProxy
+{
+    DECLARE_HIT_PROXY();
+    explicit HPABTBodyProxy(FName InBoneName)
+        : HHitProxy(HPP_World)
+        , BoneName(InBoneName)
+    {
+    }
+    FName BoneName;
+};
+IMPLEMENT_HIT_PROXY(HPABTBodyProxy, HHitProxy);
 
 namespace
 {
@@ -61,6 +76,7 @@ public:
             const bool bSelected = Setup->BoneName == SelectedBone;
             const FColor Color = bSelected ? FColor::Yellow : FColor::Cyan;
             const uint8 DepthPriority = bSelected ? SDPG_Foreground : SDPG_World;
+            PDI->SetHitProxy(new HPABTBodyProxy(Setup->BoneName));
 
             for (const FKBoxElem& Box : Setup->AggGeom.BoxElems)
             {
@@ -82,6 +98,8 @@ public:
                 const FTransform ShapeTM = Convex.GetTransform() * BoneTM;
                 DrawWireBox(PDI, ShapeTM.ToMatrixWithScale(), Convex.ElemBox, Color, DepthPriority);
             }
+
+            PDI->SetHitProxy(nullptr);
 
             if (bSelected)
             {
@@ -112,6 +130,45 @@ public:
         }
     }
 
+    void ProcessClick(FSceneView& View, HHitProxy* HitProxy, FKey Key, EInputEvent Event, uint32 HitX, uint32 HitY) override
+    {
+        if (HitProxy && HitProxy->IsA(HPABTBodyProxy::StaticGetType()))
+        {
+            HPABTBodyProxy* BodyProxy = static_cast<HPABTBodyProxy*>(HitProxy);
+            if (Owner)
+            {
+                Owner->SelectBoneFromViewport(BodyProxy->BoneName);
+            }
+            return;
+        }
+        FEditorViewportClient::ProcessClick(View, HitProxy, Key, Event, HitX, HitY);
+    }
+
+    bool InputWidgetDelta(FViewport* InViewport, EAxisList::Type CurrentAxis, FVector& Drag, FRotator& Rot, FVector& Scale) override
+    {
+        return Owner ? Owner->ApplySelectedBodyDelta(Drag, Rot, Scale) : false;
+    }
+
+    FVector GetWidgetLocation() const override
+    {
+        if (!Owner || !Owner->GetPreviewComponent() || Owner->GetSelectedBone().IsNone())
+        {
+            return FVector::ZeroVector;
+        }
+        const int32 BoneIndex = Owner->GetPreviewComponent()->GetBoneIndex(Owner->GetSelectedBone());
+        return BoneIndex != INDEX_NONE ? Owner->GetPreviewComponent()->GetBoneTransform(BoneIndex).GetLocation() : FVector::ZeroVector;
+    }
+
+    UE::Widget::EWidgetMode GetWidgetMode() const override
+    {
+        return Owner ? Owner->GetActiveWidgetMode() : UE::Widget::WM_None;
+    }
+
+    bool UsesTransformWidget() const override
+    {
+        return Owner && !Owner->GetSelectedBone().IsNone();
+    }
+
 private:
     SPABTViewport* Owner = nullptr;
 };
@@ -119,6 +176,7 @@ private:
 
 void SPABTViewport::Construct(const FArguments& InArgs)
 {
+    OnBoneSelected = InArgs._OnBoneSelected;
     PreviewScene = MakeShared<FAdvancedPreviewScene>(FPreviewScene::ConstructionValues());
     PreviewComponent = NewObject<USkeletalMeshComponent>();
     PreviewComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
@@ -202,6 +260,9 @@ TSharedPtr<SWidget> SPABTViewport::MakeViewportToolbar()
             + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text_Lambda([this](){ return bShowBones ? LOCTEXT("BonesOn", "Bones: On") : LOCTEXT("BonesOff", "Bones: Off"); }).OnClicked(this, &SPABTViewport::ToggleBones)]
             + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text_Lambda([this](){ return bShowFloor ? LOCTEXT("FloorOn", "Floor: On") : LOCTEXT("FloorOff", "Floor: Off"); }).OnClicked(this, &SPABTViewport::ToggleFloor)]
             + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text_Lambda([this](){ return bShowGrid ? LOCTEXT("GridOn", "Grid: On") : LOCTEXT("GridOff", "Grid: Off"); }).OnClicked(this, &SPABTViewport::ToggleGrid)]
+            + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(LOCTEXT("Move", "Move")).OnClicked(this, &SPABTViewport::SetTranslateMode)]
+            + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(LOCTEXT("Rotate", "Rotate")).OnClicked(this, &SPABTViewport::SetRotateMode)]
+            + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(LOCTEXT("Scale", "Scale")).OnClicked(this, &SPABTViewport::SetScaleMode)]
             + SHorizontalBox::Slot().AutoWidth()[SNew(SButton).Text(LOCTEXT("Focus", "Focus")).OnClicked(this, &SPABTViewport::FocusPreview)]
             + SHorizontalBox::Slot().FillWidth(1.f).HAlign(HAlign_Right)[SNew(STextBlock).Text(this, &SPABTViewport::GetStatsText)]
         ];
@@ -219,6 +280,83 @@ FReply SPABTViewport::FocusPreview()
         ViewportClient->Invalidate();
     }
     return FReply::Handled();
+}
+
+FReply SPABTViewport::SetTranslateMode() { WidgetMode = UE::Widget::WM_Translate; if (ViewportClient.IsValid()) ViewportClient->Invalidate(); return FReply::Handled(); }
+FReply SPABTViewport::SetRotateMode() { WidgetMode = UE::Widget::WM_Rotate; if (ViewportClient.IsValid()) ViewportClient->Invalidate(); return FReply::Handled(); }
+FReply SPABTViewport::SetScaleMode() { WidgetMode = UE::Widget::WM_Scale; if (ViewportClient.IsValid()) ViewportClient->Invalidate(); return FReply::Handled(); }
+
+void SPABTViewport::SelectBoneFromViewport(FName InBoneName)
+{
+    SelectedBone = InBoneName;
+    OnBoneSelected.ExecuteIfBound(InBoneName);
+    if (ViewportClient.IsValid())
+    {
+        ViewportClient->Invalidate();
+    }
+}
+
+bool SPABTViewport::ApplySelectedBodyDelta(const FVector& WorldDrag, const FRotator& RotationDelta, const FVector& ScaleDelta)
+{
+    UPhysicsAsset* Asset = PhysicsAsset.Get();
+    if (!Asset || !PreviewComponent || SelectedBone.IsNone())
+    {
+        return false;
+    }
+
+    USkeletalBodySetup* Setup = nullptr;
+    for (USkeletalBodySetup* Candidate : Asset->SkeletalBodySetups)
+    {
+        if (Candidate && Candidate->BoneName == SelectedBone)
+        {
+            Setup = Candidate;
+            break;
+        }
+    }
+    if (!Setup)
+    {
+        return false;
+    }
+
+    const int32 BoneIndex = PreviewComponent->GetBoneIndex(SelectedBone);
+    if (BoneIndex == INDEX_NONE)
+    {
+        return false;
+    }
+
+    Asset->Modify();
+    Setup->Modify();
+    const FTransform BoneTM = PreviewComponent->GetBoneTransform(BoneIndex);
+    const FVector LocalDrag = BoneTM.InverseTransformVectorNoScale(WorldDrag);
+    const FQuat LocalRot = BoneTM.InverseTransformRotation(RotationDelta.Quaternion());
+    const FVector SafeScale = FVector(
+        FMath::IsNearlyZero(ScaleDelta.X) ? 1.f : ScaleDelta.X,
+        FMath::IsNearlyZero(ScaleDelta.Y) ? 1.f : ScaleDelta.Y,
+        FMath::IsNearlyZero(ScaleDelta.Z) ? 1.f : ScaleDelta.Z);
+
+    auto ApplyDelta = [&](auto& Elem)
+    {
+        FTransform TM = Elem.GetTransform();
+        TM.AddToTranslation(LocalDrag);
+        TM.ConcatenateRotation(LocalRot);
+        TM.SetScale3D(TM.GetScale3D() * SafeScale);
+        Elem.SetTransform(TM);
+    };
+
+    for (FKBoxElem& Elem : Setup->AggGeom.BoxElems) ApplyDelta(Elem);
+    for (FKSphereElem& Elem : Setup->AggGeom.SphereElems) ApplyDelta(Elem);
+    for (FKSphylElem& Elem : Setup->AggGeom.SphylElems) ApplyDelta(Elem);
+    for (FKConvexElem& Elem : Setup->AggGeom.ConvexElems) { ApplyDelta(Elem); Elem.UpdateElemBox(); }
+
+    Setup->InvalidatePhysicsData();
+    Setup->CreatePhysicsMeshes();
+    Asset->UpdateBodySetupIndexMap();
+    Asset->MarkPackageDirty();
+    if (ViewportClient.IsValid())
+    {
+        ViewportClient->Invalidate();
+    }
+    return true;
 }
 
 FText SPABTViewport::GetStatsText() const

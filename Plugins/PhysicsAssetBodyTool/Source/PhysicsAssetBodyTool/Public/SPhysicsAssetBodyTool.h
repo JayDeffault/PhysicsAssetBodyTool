@@ -28,6 +28,7 @@ private:
     void RefreshPreviewAndDetails();
     TSharedRef<ITableRow> MakeBoneRow(TSharedPtr<FPABTBoneItem> Item, const TSharedRef<STableViewBase>& Owner);
     void OnBoneSelectionChanged(TSharedPtr<FPABTBoneItem> Item, ESelectInfo::Type SelectInfo);
+    void OnViewportBoneSelected(FName BoneName);
     TSharedPtr<SWidget> BuildBoneContextMenu();
     void SetSelectedBodiesPhysicsType(EPhysicsType NewPhysicsType);
     TSharedRef<SWidget> BuildAssetBar();

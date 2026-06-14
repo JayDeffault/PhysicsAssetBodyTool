@@ -38,7 +38,7 @@ void SPhysicsAssetBodyTool::Construct(const FArguments& InArgs)
                 + SVerticalBox::Slot().AutoHeight()[ SAssignNew(SearchBox, SSearchBox).HintText(LOCTEXT("SearchBones", "Search bones")).OnTextChanged_Lambda([this](const FText& T){ SearchText=T.ToString(); RebuildBoneTree(); }) ]
                 + SVerticalBox::Slot().FillHeight(1.f)[ SAssignNew(BoneTree, STreeView<TSharedPtr<FPABTBoneItem>>).TreeItemsSource(&VisibleRootBones).SelectionMode(ESelectionMode::Multi).OnGenerateRow(this,&SPhysicsAssetBodyTool::MakeBoneRow).OnGetChildren_Lambda([](TSharedPtr<FPABTBoneItem> I,TArray<TSharedPtr<FPABTBoneItem>>& C){ C=I->Children; }).OnSelectionChanged(this,&SPhysicsAssetBodyTool::OnBoneSelectionChanged).OnContextMenuOpening(this,&SPhysicsAssetBodyTool::BuildBoneContextMenu) ]]
             + SSplitter::Slot().Value(.45f)[ SNew(SVerticalBox)
-                + SVerticalBox::Slot().FillHeight(.62f)[ SAssignNew(ViewportWidget, SPABTViewport) ]
+                + SVerticalBox::Slot().FillHeight(.62f)[ SAssignNew(ViewportWidget, SPABTViewport).OnBoneSelected(this, &SPhysicsAssetBodyTool::OnViewportBoneSelected) ]
                 + SVerticalBox::Slot().FillHeight(.38f)[ DetailsView.ToSharedRef() ] ]
             + SSplitter::Slot().Value(.33f)[ SNew(SSplitter).Orientation(Orient_Vertical)
                 + SSplitter::Slot().Value(.38f)[BuildBodyPanel()]
@@ -138,6 +138,7 @@ TSharedRef<ITableRow> SPhysicsAssetBodyTool::MakeBoneRow(TSharedPtr<FPABTBoneIte
     return SNew(STableRow<TSharedPtr<FPABTBoneItem>>, Owner)[ SNew(STextBlock).Text(FText::FromString(ModePrefix + Item->BoneName.ToString())).ColorAndOpacity(bHasBody ? FLinearColor::Green : (bMirror ? FLinearColor(.45f,.65f,1.f) : FLinearColor::White)) ];
 }
 void SPhysicsAssetBodyTool::OnBoneSelectionChanged(TSharedPtr<FPABTBoneItem> Item, ESelectInfo::Type) { if (Item) SelectedBone = Item->BoneName; RefreshPreviewAndDetails(); RefreshLists(); }
+void SPhysicsAssetBodyTool::OnViewportBoneSelected(FName BoneName) { SelectedBone = BoneName; RefreshPreviewAndDetails(); RefreshLists(); }
 
 TSharedRef<SWidget> SPhysicsAssetBodyTool::BuildBodyPanel()
 {

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "SEditorViewport.h"
+#include "UnrealWidget.h"
 
 class FAdvancedPreviewScene;
 class FEditorViewportClient;
@@ -10,18 +11,24 @@ class UPhysicsAsset;
 class USkeletalMesh;
 class USkeletalMeshComponent;
 
+DECLARE_DELEGATE_OneParam(FPABTOnViewportBoneSelected, FName);
+
 class SPABTViewport : public SEditorViewport
 {
 public:
     SLATE_BEGIN_ARGS(SPABTViewport) {}
+        SLATE_EVENT(FPABTOnViewportBoneSelected, OnBoneSelected)
     SLATE_END_ARGS()
 
     void Construct(const FArguments& InArgs);
     void SetPreviewAssets(USkeletalMesh* InSkeletalMesh, UPhysicsAsset* InPhysicsAsset);
     void SetSelectedBone(FName InBoneName);
+    void SelectBoneFromViewport(FName InBoneName);
+    bool ApplySelectedBodyDelta(const FVector& WorldDrag, const FRotator& RotationDelta, const FVector& ScaleDelta);
     USkeletalMeshComponent* GetPreviewComponent() const { return PreviewComponent; }
     UPhysicsAsset* GetPhysicsAsset() const { return PhysicsAsset.Get(); }
     FName GetSelectedBone() const { return SelectedBone; }
+    UE::Widget::EWidgetMode GetActiveWidgetMode() const { return WidgetMode; }
 
 protected:
     TSharedRef<FEditorViewportClient> MakeEditorViewportClient() override;
@@ -34,6 +41,9 @@ private:
     FReply ToggleFloor();
     FReply ToggleGrid();
     FReply FocusPreview();
+    FReply SetTranslateMode();
+    FReply SetRotateMode();
+    FReply SetScaleMode();
     FText GetStatsText() const;
 
     TSharedPtr<FAdvancedPreviewScene> PreviewScene;
@@ -45,4 +55,6 @@ private:
     bool bShowBones = true;
     bool bShowFloor = true;
     bool bShowGrid = true;
+    FPABTOnViewportBoneSelected OnBoneSelected;
+    UE::Widget::EWidgetMode WidgetMode = UE::Widget::WM_Translate;
 };
