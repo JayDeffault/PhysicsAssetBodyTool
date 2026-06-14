@@ -5,6 +5,7 @@
 
 class FAdvancedPreviewScene;
 class FEditorViewportClient;
+class FPrimitiveDrawInterface;
 class UPhysicsAsset;
 class USkeletalMesh;
 class USkeletalMeshComponent;
@@ -18,6 +19,9 @@ public:
     void Construct(const FArguments& InArgs);
     void SetPreviewAssets(USkeletalMesh* InSkeletalMesh, UPhysicsAsset* InPhysicsAsset);
     void SetSelectedBone(FName InBoneName);
+    USkeletalMeshComponent* GetPreviewComponent() const { return PreviewComponent; }
+    UPhysicsAsset* GetPhysicsAsset() const { return PhysicsAsset.Get(); }
+    FName GetSelectedBone() const { return SelectedBone; }
 
 protected:
     TSharedRef<FEditorViewportClient> MakeEditorViewportClient() override;

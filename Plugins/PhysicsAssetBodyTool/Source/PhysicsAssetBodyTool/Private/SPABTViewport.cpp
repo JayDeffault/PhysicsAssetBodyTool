@@ -6,6 +6,8 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "PhysicsEngine/PhysicsAsset.h"
 #include "PhysicsEngine/SkeletalBodySetup.h"
+#include "PhysicsEngine/PhysicsConstraintTemplate.h"
+#include "SceneManagement.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SSpacer.h"
@@ -14,6 +16,106 @@
 #include "Styling/AppStyle.h"
 
 #define LOCTEXT_NAMESPACE "PhysicsAssetBodyToolViewport"
+
+namespace
+{
+class FPABTViewportClient final : public FEditorViewportClient
+{
+public:
+    FPABTViewportClient(FPreviewScene* InPreviewScene, const TSharedRef<SEditorViewport>& InViewport, SPABTViewport* InOwner)
+        : FEditorViewportClient(nullptr, InPreviewScene, InViewport)
+        , Owner(InOwner)
+    {
+    }
+
+    void Draw(const FSceneView* View, FPrimitiveDrawInterface* PDI) override
+    {
+        FEditorViewportClient::Draw(View, PDI);
+        if (!Owner || !PDI)
+        {
+            return;
+        }
+
+        USkeletalMeshComponent* Component = Owner->GetPreviewComponent();
+        UPhysicsAsset* Asset = Owner->GetPhysicsAsset();
+        if (!Component || !Asset)
+        {
+            return;
+        }
+
+        const FName SelectedBone = Owner->GetSelectedBone();
+        for (const USkeletalBodySetup* Setup : Asset->SkeletalBodySetups)
+        {
+            if (!Setup)
+            {
+                continue;
+            }
+
+            const int32 BoneIndex = Component->GetBoneIndex(Setup->BoneName);
+            if (BoneIndex == INDEX_NONE)
+            {
+                continue;
+            }
+
+            const FTransform BoneTM = Component->GetBoneTransform(BoneIndex);
+            const bool bSelected = Setup->BoneName == SelectedBone;
+            const FColor Color = bSelected ? FColor::Yellow : FColor::Cyan;
+            const uint8 DepthPriority = bSelected ? SDPG_Foreground : SDPG_World;
+
+            for (const FKBoxElem& Box : Setup->AggGeom.BoxElems)
+            {
+                const FTransform ShapeTM = Box.GetTransform() * BoneTM;
+                DrawWireBox(PDI, ShapeTM.ToMatrixWithScale(), FBox(FVector(-Box.X, -Box.Y, -Box.Z) * 0.5f, FVector(Box.X, Box.Y, Box.Z) * 0.5f), Color, DepthPriority);
+            }
+            for (const FKSphereElem& Sphere : Setup->AggGeom.SphereElems)
+            {
+                const FTransform ShapeTM = Sphere.GetTransform() * BoneTM;
+                DrawWireSphere(PDI, ShapeTM.GetLocation(), Color, Sphere.Radius, 24, DepthPriority);
+            }
+            for (const FKSphylElem& Capsule : Setup->AggGeom.SphylElems)
+            {
+                const FTransform ShapeTM = Capsule.GetTransform() * BoneTM;
+                DrawWireCapsule(PDI, ShapeTM.GetLocation(), ShapeTM.GetUnitAxis(EAxis::X), ShapeTM.GetUnitAxis(EAxis::Y), ShapeTM.GetUnitAxis(EAxis::Z), Color, Capsule.Radius, Capsule.Length * 0.5f, 16, DepthPriority);
+            }
+            for (const FKConvexElem& Convex : Setup->AggGeom.ConvexElems)
+            {
+                const FTransform ShapeTM = Convex.GetTransform() * BoneTM;
+                DrawWireBox(PDI, ShapeTM.ToMatrixWithScale(), Convex.ElemBox, Color, DepthPriority);
+            }
+
+            if (bSelected)
+            {
+                const FVector Origin = BoneTM.GetLocation();
+                constexpr float AxisLength = 35.f;
+                PDI->DrawLine(Origin, Origin + BoneTM.GetUnitAxis(EAxis::X) * AxisLength, FLinearColor::Red, SDPG_Foreground, 2.f);
+                PDI->DrawLine(Origin, Origin + BoneTM.GetUnitAxis(EAxis::Y) * AxisLength, FLinearColor::Green, SDPG_Foreground, 2.f);
+                PDI->DrawLine(Origin, Origin + BoneTM.GetUnitAxis(EAxis::Z) * AxisLength, FLinearColor::Blue, SDPG_Foreground, 2.f);
+            }
+        }
+
+        for (const UPhysicsConstraintTemplate* Constraint : Asset->ConstraintSetup)
+        {
+            if (!Constraint)
+            {
+                continue;
+            }
+            const int32 Bone1 = Component->GetBoneIndex(Constraint->DefaultInstance.ConstraintBone1);
+            const int32 Bone2 = Component->GetBoneIndex(Constraint->DefaultInstance.ConstraintBone2);
+            if (Bone1 != INDEX_NONE && Bone2 != INDEX_NONE)
+            {
+                const FVector A = Component->GetBoneTransform(Bone1).TransformPosition(Constraint->DefaultInstance.Pos1);
+                const FVector B = Component->GetBoneTransform(Bone2).TransformPosition(Constraint->DefaultInstance.Pos2);
+                PDI->DrawLine(A, B, FLinearColor::Magenta, SDPG_Foreground, 2.f);
+                DrawWireSphere(PDI, A, FColor::Magenta, 4.f, 8, SDPG_Foreground);
+                DrawWireSphere(PDI, B, FColor::Magenta, 4.f, 8, SDPG_Foreground);
+            }
+        }
+    }
+
+private:
+    SPABTViewport* Owner = nullptr;
+};
+}
 
 void SPABTViewport::Construct(const FArguments& InArgs)
 {
@@ -61,7 +163,7 @@ void SPABTViewport::SetSelectedBone(FName InBoneName)
 
 TSharedRef<FEditorViewportClient> SPABTViewport::MakeEditorViewportClient()
 {
-    ViewportClient = MakeShared<FEditorViewportClient>(nullptr, PreviewScene.Get(), SharedThis(this));
+    ViewportClient = MakeShared<FPABTViewportClient>(PreviewScene.Get(), SharedThis(this), this);
     ViewportClient->SetViewMode(VMI_Lit);
     ViewportClient->SetRealtime(true);
     ViewportClient->bSetListenerPosition = false;

@@ -13,6 +13,7 @@
 #include "Widgets/Views/SListView.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Layout/SScrollBox.h"
+#include "Widgets/Layout/SExpandableArea.h"
 #include "Engine/SkeletalMesh.h"
 #include "Modules/ModuleManager.h"
 #include "PropertyEditorModule.h"
@@ -140,15 +141,24 @@ void SPhysicsAssetBodyTool::OnBoneSelectionChanged(TSharedPtr<FPABTBoneItem> Ite
 
 TSharedRef<SWidget> SPhysicsAssetBodyTool::BuildBodyPanel()
 {
-    return SNew(SScrollBox)+SScrollBox::Slot()[ SAssignNew(BodyList,SVerticalBox) ];
+    return SNew(SExpandableArea)
+        .InitiallyCollapsed(false)
+        .HeaderContent()[SNew(STextBlock).Text(LOCTEXT("BodyEditorTab", "Body Editor"))]
+        .BodyContent()[SNew(SScrollBox)+SScrollBox::Slot()[SAssignNew(BodyList,SVerticalBox)]];
 }
 TSharedRef<SWidget> SPhysicsAssetBodyTool::BuildConstraintPanel()
 {
-    return SNew(SScrollBox)+SScrollBox::Slot()[ SAssignNew(ConstraintList,SVerticalBox) ];
+    return SNew(SExpandableArea)
+        .InitiallyCollapsed(false)
+        .HeaderContent()[SNew(STextBlock).Text(LOCTEXT("ConstraintEditorTab", "Constraint Editor"))]
+        .BodyContent()[SNew(SScrollBox)+SScrollBox::Slot()[SAssignNew(ConstraintList,SVerticalBox)]];
 }
 TSharedRef<SWidget> SPhysicsAssetBodyTool::BuildValidationPanel()
 {
-    return SNew(SScrollBox)+SScrollBox::Slot()[ SAssignNew(ValidationList,SVerticalBox) ];
+    return SNew(SExpandableArea)
+        .InitiallyCollapsed(false)
+        .HeaderContent()[SNew(STextBlock).Text(LOCTEXT("ValidationTab", "Validation"))]
+        .BodyContent()[SNew(SScrollBox)+SScrollBox::Slot()[SAssignNew(ValidationList,SVerticalBox)]];
 }
 
 
