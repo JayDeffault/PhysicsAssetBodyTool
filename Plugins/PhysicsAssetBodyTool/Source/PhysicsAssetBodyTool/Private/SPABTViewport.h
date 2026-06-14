@@ -24,7 +24,7 @@ public:
     void SetPreviewAssets(USkeletalMesh* InSkeletalMesh, UPhysicsAsset* InPhysicsAsset);
     void SetSelectedBone(FName InBoneName);
     void SelectBoneFromViewport(FName InBoneName);
-    bool ApplySelectedBodyDelta(const FVector& WorldDrag, const FRotator& RotationDelta, const FVector& ScaleDelta);
+    bool ApplySelectedBodyDelta(const FVector& WorldDrag, const FRotator& RotationDelta, const FVector& ScaleDelta, EAxisList::Type CurrentAxis);
     FReply FocusPreview();
     void SetWidgetMode(UE::Widget::EWidgetMode InWidgetMode);
     USkeletalMeshComponent* GetPreviewComponent() const { return PreviewComponent; }

@@ -179,7 +179,7 @@ public:
         {
             return false;
         }
-        return Owner->ApplySelectedBodyDelta(Drag, Rot, Scale);
+        return Owner->ApplySelectedBodyDelta(Drag, Rot, Scale, CurrentAxis);
     }
 
     FVector GetWidgetLocation() const override
@@ -338,7 +338,7 @@ void SPABTViewport::SelectBoneFromViewport(FName InBoneName)
     }
 }
 
-bool SPABTViewport::ApplySelectedBodyDelta(const FVector& WorldDrag, const FRotator& RotationDelta, const FVector& ScaleDelta)
+bool SPABTViewport::ApplySelectedBodyDelta(const FVector& WorldDrag, const FRotator& RotationDelta, const FVector& ScaleDelta, EAxisList::Type CurrentAxis)
 {
     UPhysicsAsset* Asset = PhysicsAsset.Get();
     if (!Asset || !PreviewComponent || SelectedBone.IsNone())
@@ -373,26 +373,94 @@ bool SPABTViewport::ApplySelectedBodyDelta(const FVector& WorldDrag, const FRota
     const bool bRotateMode = WidgetMode == UE::Widget::WM_Rotate;
     const bool bScaleMode = WidgetMode == UE::Widget::WM_Scale;
 
-    const FVector LocalDrag = bTranslateMode ? BoneTM.InverseTransformVectorNoScale(WorldDrag) : FVector::ZeroVector;
-    const FQuat LocalRot = bRotateMode ? BoneTM.InverseTransformRotation(RotationDelta.Quaternion()) : FQuat::Identity;
-    const FVector SafeScale = bScaleMode ? FVector(
-        FMath::IsNearlyZero(ScaleDelta.X) ? 1.f : ScaleDelta.X,
-        FMath::IsNearlyZero(ScaleDelta.Y) ? 1.f : ScaleDelta.Y,
-        FMath::IsNearlyZero(ScaleDelta.Z) ? 1.f : ScaleDelta.Z) : FVector::OneVector;
+    auto HasAxis = [CurrentAxis](EAxisList::Type Axis)
+    {
+        return (CurrentAxis & Axis) != EAxisList::None;
+    };
 
-    auto ApplyDelta = [&](auto& Elem)
+    FVector AxisMask(
+        HasAxis(EAxisList::X) ? 1.f : 0.f,
+        HasAxis(EAxisList::Y) ? 1.f : 0.f,
+        HasAxis(EAxisList::Z) ? 1.f : 0.f);
+    if (AxisMask.IsNearlyZero())
+    {
+        AxisMask = FVector::OneVector;
+    }
+
+    FVector WorldConstrainedDrag = FVector::ZeroVector;
+    if (bTranslateMode)
+    {
+        constexpr float TranslationSensitivity = 0.25f;
+        const FVector AxisX = BoneTM.GetUnitAxis(EAxis::X);
+        const FVector AxisY = BoneTM.GetUnitAxis(EAxis::Y);
+        const FVector AxisZ = BoneTM.GetUnitAxis(EAxis::Z);
+        WorldConstrainedDrag += AxisX * FVector::DotProduct(WorldDrag, AxisX) * AxisMask.X;
+        WorldConstrainedDrag += AxisY * FVector::DotProduct(WorldDrag, AxisY) * AxisMask.Y;
+        WorldConstrainedDrag += AxisZ * FVector::DotProduct(WorldDrag, AxisZ) * AxisMask.Z;
+        WorldConstrainedDrag *= TranslationSensitivity;
+    }
+
+    const FVector LocalDrag = BoneTM.InverseTransformVectorNoScale(WorldConstrainedDrag);
+    const FQuat LocalRot = bRotateMode ? BoneTM.InverseTransformRotation(RotationDelta.Quaternion()) : FQuat::Identity;
+
+    FVector ScaleAxisDelta = FVector::ZeroVector;
+    if (bScaleMode)
+    {
+        constexpr float ScaleSensitivity = 0.01f;
+        ScaleAxisDelta = FVector(ScaleDelta.X * AxisMask.X, ScaleDelta.Y * AxisMask.Y, ScaleDelta.Z * AxisMask.Z) * ScaleSensitivity;
+        if (ScaleAxisDelta.IsNearlyZero())
+        {
+            const float UniformDelta = ScaleDelta.GetAbsMax() * ScaleSensitivity;
+            ScaleAxisDelta = AxisMask * UniformDelta;
+        }
+    }
+
+    auto ApplyTransformDelta = [&](auto& Elem)
     {
         FTransform TM = Elem.GetTransform();
         TM.AddToTranslation(LocalDrag);
         TM.ConcatenateRotation(LocalRot);
-        TM.SetScale3D(TM.GetScale3D() * SafeScale);
         Elem.SetTransform(TM);
     };
 
-    for (FKBoxElem& Elem : Setup->AggGeom.BoxElems) ApplyDelta(Elem);
-    for (FKSphereElem& Elem : Setup->AggGeom.SphereElems) ApplyDelta(Elem);
-    for (FKSphylElem& Elem : Setup->AggGeom.SphylElems) ApplyDelta(Elem);
-    for (FKConvexElem& Elem : Setup->AggGeom.ConvexElems) { ApplyDelta(Elem); Elem.UpdateElemBox(); }
+    for (FKBoxElem& Elem : Setup->AggGeom.BoxElems)
+    {
+        ApplyTransformDelta(Elem);
+        if (bScaleMode)
+        {
+            Elem.X = FMath::Max(0.1f, Elem.X * (1.f + ScaleAxisDelta.X));
+            Elem.Y = FMath::Max(0.1f, Elem.Y * (1.f + ScaleAxisDelta.Y));
+            Elem.Z = FMath::Max(0.1f, Elem.Z * (1.f + ScaleAxisDelta.Z));
+        }
+    }
+    for (FKSphereElem& Elem : Setup->AggGeom.SphereElems)
+    {
+        ApplyTransformDelta(Elem);
+        if (bScaleMode)
+        {
+            Elem.Radius = FMath::Max(0.1f, Elem.Radius * (1.f + ScaleAxisDelta.GetAbsMax()));
+        }
+    }
+    for (FKSphylElem& Elem : Setup->AggGeom.SphylElems)
+    {
+        ApplyTransformDelta(Elem);
+        if (bScaleMode)
+        {
+            Elem.Radius = FMath::Max(0.1f, Elem.Radius * (1.f + FMath::Max(FMath::Abs(ScaleAxisDelta.X), FMath::Abs(ScaleAxisDelta.Y))));
+            Elem.Length = FMath::Max(0.1f, Elem.Length * (1.f + ScaleAxisDelta.Z));
+        }
+    }
+    for (FKConvexElem& Elem : Setup->AggGeom.ConvexElems)
+    {
+        ApplyTransformDelta(Elem);
+        if (bScaleMode)
+        {
+            FTransform TM = Elem.GetTransform();
+            TM.SetScale3D(TM.GetScale3D() * (FVector::OneVector + ScaleAxisDelta));
+            Elem.SetTransform(TM);
+        }
+        Elem.UpdateElemBox();
+    }
 
     Setup->InvalidatePhysicsData();
     Setup->CreatePhysicsMeshes();
