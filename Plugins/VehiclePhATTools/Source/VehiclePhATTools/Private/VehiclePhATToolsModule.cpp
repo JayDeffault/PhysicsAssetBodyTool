@@ -280,6 +280,10 @@ public:
                 [SNew(STextBlock).Text(LOCTEXT("FlipAxis", "Flip axis"))]
                 + SUniformGridPanel::Slot(1, 5)
                 [SNew(SCheckBox).IsChecked(this, &SCreateConstraintDialog::GetFlipAxisState).OnCheckStateChanged(this, &SCreateConstraintDialog::OnFlipAxisChanged)]
+                + SUniformGridPanel::Slot(0, 6)
+                [SNew(STextBlock).Text(LOCTEXT("DisableCollision", "Disable collision"))]
+                + SUniformGridPanel::Slot(1, 6)
+                [SNew(SCheckBox).IsChecked(this, &SCreateConstraintDialog::GetDisableCollisionState).OnCheckStateChanged(this, &SCreateConstraintDialog::OnDisableCollisionChanged)]
             ]
             + SVerticalBox::Slot().FillHeight(1.f).Padding(6)
             [SNew(STextBlock).Text(this, &SCreateConstraintDialog::GetStatusText).AutoWrapText(true)]
@@ -308,12 +312,14 @@ private:
     FText GetStatusText() const { return FText::FromString(Status); }
     ECheckBoxState GetUpdateExistingState() const { return Options.bUpdateExisting ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; }
     ECheckBoxState GetFlipAxisState() const { return Options.bFlipAxis ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; }
+    ECheckBoxState GetDisableCollisionState() const { return Options.bDisableCollision ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; }
 
     void OnParentBoneCommitted(const FText& Text, ETextCommit::Type) { Options.ParentBone = VehiclePhATToolsUI::TextToName(Text); }
     void OnChildBoneCommitted(const FText& Text, ETextCommit::Type) { Options.ChildBone = VehiclePhATToolsUI::TextToName(Text); }
     void OnAngularLimitChanged(float NewValue) { Options.AngularLimitDegrees = NewValue; Options.Preset = EVehiclePhATConstraintPreset::Custom; }
     void OnUpdateExistingChanged(ECheckBoxState State) { Options.bUpdateExisting = State == ECheckBoxState::Checked; }
     void OnFlipAxisChanged(ECheckBoxState State) { Options.bFlipAxis = State == ECheckBoxState::Checked; }
+    void OnDisableCollisionChanged(ECheckBoxState State) { Options.bDisableCollision = State == ECheckBoxState::Checked; }
 
     TSharedRef<SWidget> GeneratePresetWidget(TSharedPtr<FString> Item) const
     {

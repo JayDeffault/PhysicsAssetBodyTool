@@ -14,6 +14,7 @@ struct FVehiclePhATConstraintOptions
     float AngularLimitDegrees = 70.f;
     bool bFlipAxis = false;
     bool bUpdateExisting = false;
+    bool bDisableCollision = true;
 };
 
 class VEHICLEPHATTOOLS_API FVehiclePhATConstraintUtils

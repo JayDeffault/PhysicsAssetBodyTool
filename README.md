@@ -91,3 +91,9 @@ Current MVP 3 coverage includes:
 - explicit `Update Existing` and `Flip Axis` controls in the Create Vehicle Constraint dialog.
 
 The remaining work after MVP 3 is the interactive convex creation/editing workflow from selected skeletal mesh vertices.
+
+## Constraint frame notes
+
+MVP 3 constraint creation now places the generated constraint frames at the selected child bone relative to the selected parent bone using the preview skeletal mesh reference skeleton. This avoids creating a new constraint with both reference frame positions at local `(0, 0, 0)`, which can cause the joint to appear at the skeletal mesh origin when simulation starts.
+
+For door-style presets, the parent reference frame is biased by the selected angular limit around yaw so a 60/70 degree hinge behaves like an outward range instead of a symmetric inward/outward range. Bonnet/Boot presets use a vertical hinge bias. All newly created or updated vehicle constraints have `Disable Collision` enabled by default, with a checkbox in the dialog if you need to turn it off.
