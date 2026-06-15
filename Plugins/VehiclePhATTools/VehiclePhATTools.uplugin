@@ -6,7 +6,7 @@
   "Description": "Editor tools for faster vehicle Physics Asset body and constraint setup.",
   "Category": "Physics",
   "CreatedBy": "OpenAI",
-  "EnabledByDefault": false,
+  "EnabledByDefault": true,
   "CanContainContent": false,
   "IsBetaVersion": true,
   "Modules": [
