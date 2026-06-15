@@ -80,3 +80,14 @@ Engine\Build\BatchFiles\Build.bat YourProjectEditor Win64 Development -Project="
 ```
 
 Generated `Binaries` and `Intermediate` directories are build artifacts and are intentionally not committed to source control.
+
+## MVP 3 status
+
+Current MVP 3 coverage includes:
+
+- mirrored primitive and convex body data through `FVehiclePhATMirrorUtils`;
+- mirror preview that reports source/target body availability and shape counts, including convex counts;
+- constraint presets for Door 60, Door 70, Bonnet 65, Boot 70, and Custom;
+- explicit `Update Existing` and `Flip Axis` controls in the Create Vehicle Constraint dialog.
+
+The remaining work after MVP 3 is the interactive convex creation/editing workflow from selected skeletal mesh vertices.

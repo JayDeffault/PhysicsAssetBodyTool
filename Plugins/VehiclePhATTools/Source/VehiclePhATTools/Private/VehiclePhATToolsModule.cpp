@@ -1,6 +1,7 @@
 #include "VehiclePhATToolsModule.h"
 
 #include "Framework/Application/SlateApplication.h"
+#include "PhysicsEngine/AggregateGeom.h"
 #include "PhysicsEngine/PhysicsAsset.h"
 #include "PhysicsEngine/SkeletalBodySetup.h"
 #include "ScopedTransaction.h"
@@ -15,6 +16,7 @@
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SCheckBox.h"
+#include "Widgets/Input/SComboBox.h"
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Input/SNumericEntryBox.h"
 #include "Widgets/Layout/SScrollBox.h"
@@ -46,6 +48,45 @@ static void ShowModalWindow(const FText& Title, const TSharedRef<SWidget>& Conte
 static FName TextToName(const FText& Text)
 {
     return FName(*Text.ToString().TrimStartAndEnd());
+}
+
+static FText ConstraintPresetToText(EVehiclePhATConstraintPreset Preset)
+{
+    switch (Preset)
+    {
+    case EVehiclePhATConstraintPreset::Door60:
+        return LOCTEXT("PresetDoor60", "Door 60 degrees");
+    case EVehiclePhATConstraintPreset::Door70:
+        return LOCTEXT("PresetDoor70", "Door 70 degrees");
+    case EVehiclePhATConstraintPreset::Bonnet65:
+        return LOCTEXT("PresetBonnet65", "Bonnet 65 degrees");
+    case EVehiclePhATConstraintPreset::Boot70:
+        return LOCTEXT("PresetBoot70", "Boot 70 degrees");
+    case EVehiclePhATConstraintPreset::Custom:
+    default:
+        return LOCTEXT("PresetCustom", "Custom");
+    }
+}
+
+static EVehiclePhATConstraintPreset PresetFromLabel(const FString& Label)
+{
+    if (Label.Contains(TEXT("Door 60")))
+    {
+        return EVehiclePhATConstraintPreset::Door60;
+    }
+    if (Label.Contains(TEXT("Door 70")))
+    {
+        return EVehiclePhATConstraintPreset::Door70;
+    }
+    if (Label.Contains(TEXT("Bonnet")))
+    {
+        return EVehiclePhATConstraintPreset::Bonnet65;
+    }
+    if (Label.Contains(TEXT("Boot")))
+    {
+        return EVehiclePhATConstraintPreset::Boot70;
+    }
+    return EVehiclePhATConstraintPreset::Custom;
 }
 }
 
@@ -147,14 +188,28 @@ private:
 
         for (const FVehiclePhATBodyPair& Pair : Pairs)
         {
+            FString ShapeSummary = TEXT("source body missing");
+            if (const USkeletalBodySetup* SourceBody = FVehiclePhATBodyUtils::FindBodySetup(PhysicsAsset, Pair.SourceBone))
+            {
+                const FKAggregateGeom& AggGeom = SourceBody->AggGeom;
+                ShapeSummary = FString::Printf(
+                    TEXT("boxes=%d spheres=%d capsules=%d tapered=%d convex=%d"),
+                    AggGeom.BoxElems.Num(),
+                    AggGeom.SphereElems.Num(),
+                    AggGeom.SphylElems.Num(),
+                    AggGeom.TaperedCapsuleElems.Num(),
+                    AggGeom.ConvexElems.Num());
+            }
+
             PreviewText += FString::Printf(
-                TEXT("\n[%s] %s -> %s | source body: %s | target bone: %s | target body: %s"),
+                TEXT("\n[%s] %s -> %s | source body: %s | target bone: %s | target body: %s | %s"),
                 Pair.bSelected ? TEXT("x") : TEXT(" "),
                 *Pair.SourceBone.ToString(),
                 *Pair.TargetBone.ToString(),
                 Pair.bSourceBodyExists ? TEXT("yes") : TEXT("no"),
                 Pair.bTargetBoneExists ? TEXT("yes") : TEXT("no"),
-                Pair.bTargetBodyExists ? TEXT("yes") : TEXT("no"));
+                Pair.bTargetBodyExists ? TEXT("yes") : TEXT("no"),
+                *ShapeSummary);
         }
     }
 };
@@ -175,6 +230,14 @@ public:
         Options.ChildBone = InArgs._DefaultChildBone;
         Options.Preset = EVehiclePhATConstraintPreset::Door70;
         Options.AngularLimitDegrees = 70.f;
+        Options.bUpdateExisting = true;
+
+        PresetLabels.Add(MakeShared<FString>(VehiclePhATToolsUI::ConstraintPresetToText(EVehiclePhATConstraintPreset::Door60).ToString()));
+        PresetLabels.Add(MakeShared<FString>(VehiclePhATToolsUI::ConstraintPresetToText(EVehiclePhATConstraintPreset::Door70).ToString()));
+        PresetLabels.Add(MakeShared<FString>(VehiclePhATToolsUI::ConstraintPresetToText(EVehiclePhATConstraintPreset::Bonnet65).ToString()));
+        PresetLabels.Add(MakeShared<FString>(VehiclePhATToolsUI::ConstraintPresetToText(EVehiclePhATConstraintPreset::Boot70).ToString()));
+        PresetLabels.Add(MakeShared<FString>(VehiclePhATToolsUI::ConstraintPresetToText(EVehiclePhATConstraintPreset::Custom).ToString()));
+        SelectedPresetLabel = PresetLabels[1];
 
         ChildSlot
         [
@@ -193,22 +256,41 @@ public:
                 + SUniformGridPanel::Slot(1, 1)
                 [SNew(SEditableTextBox).Text(this, &SCreateConstraintDialog::GetChildBoneText).OnTextCommitted(this, &SCreateConstraintDialog::OnChildBoneCommitted)]
                 + SUniformGridPanel::Slot(0, 2)
-                [SNew(STextBlock).Text(LOCTEXT("AngularLimit", "Angular limit degrees"))]
+                [SNew(STextBlock).Text(LOCTEXT("ConstraintPreset", "Preset"))]
                 + SUniformGridPanel::Slot(1, 2)
-                [SNew(SNumericEntryBox<float>).Value(this, &SCreateConstraintDialog::GetAngularLimit).MinValue(0.f).MaxValue(180.f).OnValueChanged(this, &SCreateConstraintDialog::OnAngularLimitChanged)]
+                [
+                    SNew(SComboBox<TSharedPtr<FString>>)
+                    .OptionsSource(&PresetLabels)
+                    .InitiallySelectedItem(SelectedPresetLabel)
+                    .OnGenerateWidget(this, &SCreateConstraintDialog::GeneratePresetWidget)
+                    .OnSelectionChanged(this, &SCreateConstraintDialog::OnPresetChanged)
+                    [
+                        SNew(STextBlock).Text(this, &SCreateConstraintDialog::GetPresetText)
+                    ]
+                ]
                 + SUniformGridPanel::Slot(0, 3)
-                [SNew(STextBlock).Text(LOCTEXT("UpdateExisting", "Update existing"))]
+                [SNew(STextBlock).Text(LOCTEXT("AngularLimit", "Angular limit degrees"))]
                 + SUniformGridPanel::Slot(1, 3)
-                [SNew(SCheckBox).IsChecked(this, &SCreateConstraintDialog::GetUpdateExistingState).OnCheckStateChanged(this, &SCreateConstraintDialog::OnUpdateExistingChanged)]
+                [SNew(SNumericEntryBox<float>).Value(this, &SCreateConstraintDialog::GetAngularLimit).MinValue(0.f).MaxValue(180.f).OnValueChanged(this, &SCreateConstraintDialog::OnAngularLimitChanged)]
                 + SUniformGridPanel::Slot(0, 4)
-                [SNew(STextBlock).Text(LOCTEXT("FlipAxis", "Flip axis"))]
+                [SNew(STextBlock).Text(LOCTEXT("UpdateExisting", "Update existing"))]
                 + SUniformGridPanel::Slot(1, 4)
+                [SNew(SCheckBox).IsChecked(this, &SCreateConstraintDialog::GetUpdateExistingState).OnCheckStateChanged(this, &SCreateConstraintDialog::OnUpdateExistingChanged)]
+                + SUniformGridPanel::Slot(0, 5)
+                [SNew(STextBlock).Text(LOCTEXT("FlipAxis", "Flip axis"))]
+                + SUniformGridPanel::Slot(1, 5)
                 [SNew(SCheckBox).IsChecked(this, &SCreateConstraintDialog::GetFlipAxisState).OnCheckStateChanged(this, &SCreateConstraintDialog::OnFlipAxisChanged)]
             ]
             + SVerticalBox::Slot().FillHeight(1.f).Padding(6)
             [SNew(STextBlock).Text(this, &SCreateConstraintDialog::GetStatusText).AutoWrapText(true)]
             + SVerticalBox::Slot().AutoHeight().Padding(6)
-            [SNew(SButton).Text(LOCTEXT("ApplyConstraint", "Apply Constraint")).OnClicked(this, &SCreateConstraintDialog::OnApply)]
+            [
+                SNew(SUniformGridPanel).SlotPadding(4)
+                + SUniformGridPanel::Slot(0, 0)
+                [SNew(SButton).Text(LOCTEXT("FlipAxisButton", "Flip Axis")).OnClicked(this, &SCreateConstraintDialog::OnFlipAxisButton)]
+                + SUniformGridPanel::Slot(1, 0)
+                [SNew(SButton).Text(LOCTEXT("ApplyConstraint", "Apply Constraint")).OnClicked(this, &SCreateConstraintDialog::OnApply)]
+            ]
         ];
     }
 
@@ -216,9 +298,12 @@ private:
     UPhysicsAsset* PhysicsAsset = nullptr;
     FVehiclePhATConstraintOptions Options;
     FString Status;
+    TArray<TSharedPtr<FString>> PresetLabels;
+    TSharedPtr<FString> SelectedPresetLabel;
 
     FText GetParentBoneText() const { return FText::FromName(Options.ParentBone); }
     FText GetChildBoneText() const { return FText::FromName(Options.ChildBone); }
+    FText GetPresetText() const { return VehiclePhATToolsUI::ConstraintPresetToText(Options.Preset); }
     TOptional<float> GetAngularLimit() const { return Options.AngularLimitDegrees; }
     FText GetStatusText() const { return FText::FromString(Status); }
     ECheckBoxState GetUpdateExistingState() const { return Options.bUpdateExisting ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; }
@@ -229,6 +314,31 @@ private:
     void OnAngularLimitChanged(float NewValue) { Options.AngularLimitDegrees = NewValue; Options.Preset = EVehiclePhATConstraintPreset::Custom; }
     void OnUpdateExistingChanged(ECheckBoxState State) { Options.bUpdateExisting = State == ECheckBoxState::Checked; }
     void OnFlipAxisChanged(ECheckBoxState State) { Options.bFlipAxis = State == ECheckBoxState::Checked; }
+
+    TSharedRef<SWidget> GeneratePresetWidget(TSharedPtr<FString> Item) const
+    {
+        return SNew(STextBlock).Text(FText::FromString(Item.IsValid() ? *Item : FString()));
+    }
+
+    void OnPresetChanged(TSharedPtr<FString> NewSelection, ESelectInfo::Type)
+    {
+        if (!NewSelection.IsValid())
+        {
+            return;
+        }
+
+        SelectedPresetLabel = NewSelection;
+        Options.Preset = VehiclePhATToolsUI::PresetFromLabel(*NewSelection);
+        Options.AngularLimitDegrees = FVehiclePhATConstraintUtils::PresetDegrees(Options.Preset, Options.AngularLimitDegrees);
+        Status = FString::Printf(TEXT("Preset selected: %s"), *(*NewSelection));
+    }
+
+    FReply OnFlipAxisButton()
+    {
+        Options.bFlipAxis = !Options.bFlipAxis;
+        Status = Options.bFlipAxis ? TEXT("Axis flipped. Apply to update/create the constraint.") : TEXT("Axis restored. Apply to update/create the constraint.");
+        return FReply::Handled();
+    }
 
     FReply OnApply()
     {
