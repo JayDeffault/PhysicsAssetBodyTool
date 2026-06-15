@@ -1,14 +1,66 @@
 #include "VehiclePhATClipboard.h"
-#include "VehiclePhATBodyUtils.h"
+
 #include "PhysicsEngine/SkeletalBodySetup.h"
+#include "VehiclePhATBodyUtils.h"
 
-USkeletalBodySetup* FVehiclePhATClipboard::BodySettingsClipboard=nullptr;
-USkeletalBodySetup* FVehiclePhATClipboard::TransformClipboard=nullptr;
+TStrongObjectPtr<USkeletalBodySetup> FVehiclePhATClipboard::BodySettingsClipboard;
+TStrongObjectPtr<USkeletalBodySetup> FVehiclePhATClipboard::TransformClipboard;
 
-static USkeletalBodySetup* CloneBody(const USkeletalBodySetup* B){ if(!B)return nullptr; USkeletalBodySetup* C=NewObject<USkeletalBodySetup>(GetTransientPackage()); C->AddToRoot(); C->CopyBodyPropertiesFrom(B); C->AggGeom=B->AggGeom; C->BoneName=B->BoneName; return C; }
-bool FVehiclePhATClipboard::CopyBodySettings(const USkeletalBodySetup* B){ BodySettingsClipboard=CloneBody(B); return BodySettingsClipboard!=nullptr;}
-bool FVehiclePhATClipboard::PasteBodySettings(USkeletalBodySetup* B,FString& M){ if(!BodySettingsClipboard||!B)return false; FVehiclePhATBodyUtils::CopyBodySetupProperties(BodySettingsClipboard,B); return FVehiclePhATBodyUtils::CopyBodyShapeSettings(BodySettingsClipboard,B,EVehiclePhATShapeMismatchPolicy::ApplyCommonShapes,M);}
-bool FVehiclePhATClipboard::HasBodySettings(){return BodySettingsClipboard!=nullptr;}
-bool FVehiclePhATClipboard::CopyTransform(const USkeletalBodySetup* B){ TransformClipboard=CloneBody(B); return TransformClipboard!=nullptr;}
-bool FVehiclePhATClipboard::PasteTransform(USkeletalBodySetup* B,bool L,bool R,bool E,bool All,FString& M){ return TransformClipboard&&B&&FVehiclePhATBodyUtils::CopyShapeTransforms(TransformClipboard,B,L,R,E,All,M);}
-bool FVehiclePhATClipboard::HasTransform(){return TransformClipboard!=nullptr;}
+static TStrongObjectPtr<USkeletalBodySetup> CloneBodySetupForClipboard(const USkeletalBodySetup* BodySetup)
+{
+    if (!BodySetup)
+    {
+        return TStrongObjectPtr<USkeletalBodySetup>();
+    }
+
+    USkeletalBodySetup* Clone = NewObject<USkeletalBodySetup>(GetTransientPackage(), NAME_None, RF_Transient);
+    Clone->CopyBodyPropertiesFrom(BodySetup);
+    Clone->AggGeom = BodySetup->AggGeom;
+    Clone->BoneName = BodySetup->BoneName;
+    return TStrongObjectPtr<USkeletalBodySetup>(Clone);
+}
+
+bool FVehiclePhATClipboard::CopyBodySettings(const USkeletalBodySetup* BodySetup)
+{
+    BodySettingsClipboard = CloneBodySetupForClipboard(BodySetup);
+    return BodySettingsClipboard.IsValid();
+}
+
+bool FVehiclePhATClipboard::PasteBodySettings(USkeletalBodySetup* BodySetup, FString& OutMessage)
+{
+    if (!BodySettingsClipboard.IsValid() || !BodySetup)
+    {
+        OutMessage = TEXT("Body settings clipboard is empty or target body is invalid.");
+        return false;
+    }
+
+    FVehiclePhATBodyUtils::CopyBodySetupProperties(BodySettingsClipboard.Get(), BodySetup);
+    return FVehiclePhATBodyUtils::CopyBodyShapeSettings(BodySettingsClipboard.Get(), BodySetup, EVehiclePhATShapeMismatchPolicy::ApplyCommonShapes, OutMessage);
+}
+
+bool FVehiclePhATClipboard::HasBodySettings()
+{
+    return BodySettingsClipboard.IsValid();
+}
+
+bool FVehiclePhATClipboard::CopyTransform(const USkeletalBodySetup* BodySetup)
+{
+    TransformClipboard = CloneBodySetupForClipboard(BodySetup);
+    return TransformClipboard.IsValid();
+}
+
+bool FVehiclePhATClipboard::PasteTransform(USkeletalBodySetup* BodySetup, bool bLocation, bool bRotation, bool bScaleExtent, bool bAllShapes, FString& OutMessage)
+{
+    if (!TransformClipboard.IsValid() || !BodySetup)
+    {
+        OutMessage = TEXT("Transform clipboard is empty or target body is invalid.");
+        return false;
+    }
+
+    return FVehiclePhATBodyUtils::CopyShapeTransforms(TransformClipboard.Get(), BodySetup, bLocation, bRotation, bScaleExtent, bAllShapes, OutMessage);
+}
+
+bool FVehiclePhATClipboard::HasTransform()
+{
+    return TransformClipboard.IsValid();
+}

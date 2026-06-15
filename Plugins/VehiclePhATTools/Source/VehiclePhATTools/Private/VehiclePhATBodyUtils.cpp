@@ -1,23 +1,340 @@
 #include "VehiclePhATBodyUtils.h"
-#include "VehiclePhATToolsLog.h"
-#include "PhysicsEngine/PhysicsAsset.h"
-#include "PhysicsEngine/SkeletalBodySetup.h"
-#include "PhysicsEngine/BodySetup.h"
-#include "PhysicsEngine/AggregateGeom.h"
-#include "PhysicsEngine/PhysicsConstraintTemplate.h"
+
 #include "Editor.h"
 #include "Engine/Selection.h"
+#include "PhysicsEngine/AggregateGeom.h"
+#include "PhysicsEngine/BodySetup.h"
+#include "PhysicsEngine/PhysicsAsset.h"
+#include "PhysicsEngine/PhysicsConstraintTemplate.h"
+#include "PhysicsEngine/SkeletalBodySetup.h"
+#include "VehiclePhATToolsLog.h"
 
-UPhysicsAsset* FVehiclePhATBodyUtils::GetSelectedPhysicsAsset(){ TArray<UPhysicsAsset*> Assets=GetSelectedPhysicsAssets(); return Assets.Num()?Assets[0]:nullptr; }
-TArray<UPhysicsAsset*> FVehiclePhATBodyUtils::GetSelectedPhysicsAssets(){ TArray<UPhysicsAsset*> R; if(!GEditor)return R; USelection* Sel=GEditor->GetSelectedObjects(); for(FSelectionIterator It(*Sel); It; ++It) if(UPhysicsAsset* P=Cast<UPhysicsAsset>(*It)) R.Add(P); return R; }
-USkeletalBodySetup* FVehiclePhATBodyUtils::FindBodySetup(UPhysicsAsset* P,FName B,int32* I){ if(I)*I=INDEX_NONE; if(!P)return nullptr; for(int32 N=0;N<P->SkeletalBodySetups.Num();++N){USkeletalBodySetup* S=P->SkeletalBodySetups[N]; if(S&&S->BoneName==B){if(I)*I=N; return S;}} return nullptr; }
-int32 FVehiclePhATBodyUtils::FindBodySetupIndex(UPhysicsAsset* P,FName B){int32 I; FindBodySetup(P,B,&I); return I;}
-int32 FVehiclePhATBodyUtils::GetShapeCount(const FKAggregateGeom& Gm){return Gm.SphereElems.Num()+Gm.BoxElems.Num()+Gm.SphylElems.Num()+Gm.TaperedCapsuleElems.Num()+Gm.ConvexElems.Num();}
-bool FVehiclePhATBodyUtils::HasAnyShape(const USkeletalBodySetup* B){return B&&GetShapeCount(B->AggGeom)>0;}
-TArray<FName> FVehiclePhATBodyUtils::GetSkeletonBoneNames(const UPhysicsAsset* P){TArray<FName> R; if(!P||!P->PreviewSkeletalMesh)return R; const FReferenceSkeleton& S=P->PreviewSkeletalMesh->GetRefSkeleton(); for(int32 I=0;I<S.GetNum();++I)R.Add(S.GetBoneName(I)); return R;}
-void FVehiclePhATBodyUtils::RefreshPhysicsAsset(UPhysicsAsset* P){ if(P){ P->UpdateBodySetupIndexMap(); P->InvalidateAllPhysicsMeshes(); }}
-void FVehiclePhATBodyUtils::MarkAssetChanged(UPhysicsAsset* P){ if(P){ RefreshPhysicsAsset(P); P->MarkPackageDirty(); }}
-TArray<FVehiclePhATValidationMessage> FVehiclePhATBodyUtils::ValidatePhysicsAsset(UPhysicsAsset* P,const FString& Src,const FString& Dst){TArray<FVehiclePhATValidationMessage> M; if(!P){M.Add({FVehiclePhATValidationMessage::ESeverity::Error,TEXT("No PhysicsAsset selected.")});return M;} TSet<FName> Bodies; for(USkeletalBodySetup* B:P->SkeletalBodySetups){ if(!B){M.Add({FVehiclePhATValidationMessage::ESeverity::Error,TEXT("Null body setup entry.")});continue;} Bodies.Add(B->BoneName); if(!HasAnyShape(B))M.Add({FVehiclePhATValidationMessage::ESeverity::Warning,FString::Printf(TEXT("Body '%s' has no shapes."),*B->BoneName.ToString())}); } for(FName Bone:GetSkeletonBoneNames(P)){ if(!Bodies.Contains(Bone)) M.Add({FVehiclePhATValidationMessage::ESeverity::Info,FString::Printf(TEXT("Bone '%s' has no body."),*Bone.ToString())}); } TSet<FString> C; for(UPhysicsConstraintTemplate* T:P->ConstraintSetup){ if(!T)continue; FName A=T->DefaultInstance.ConstraintBone1, B=T->DefaultInstance.ConstraintBone2; if(!Bodies.Contains(A)||!Bodies.Contains(B))M.Add({FVehiclePhATValidationMessage::ESeverity::Warning,FString::Printf(TEXT("Constraint '%s' references missing body."),*T->GetName())}); FString K=A.LexicalLess(B)?A.ToString()+TEXT("|")+B.ToString():B.ToString()+TEXT("|")+A.ToString(); if(C.Contains(K))M.Add({FVehiclePhATValidationMessage::ESeverity::Warning,FString::Printf(TEXT("Duplicated constraint between %s and %s."),*A.ToString(),*B.ToString())}); C.Add(K);} return M;}
-bool FVehiclePhATBodyUtils::CopyBodySetupProperties(const USkeletalBodySetup* S,USkeletalBodySetup* T){ if(!S||!T)return false; FName Bone=T->BoneName; FKAggregateGeom Agg=T->AggGeom; T->CopyBodyPropertiesFrom(S); T->BoneName=Bone; T->AggGeom=Agg; return true; }
-bool FVehiclePhATBodyUtils::CopyBodyShapeSettings(const USkeletalBodySetup* S,USkeletalBodySetup* T,EVehiclePhATShapeMismatchPolicy Pol,FString& Msg){ if(!S||!T){Msg=TEXT("Invalid body.");return false;} bool Same=GetShapeCount(S->AggGeom)==GetShapeCount(T->AggGeom); if(!Same&&Pol==EVehiclePhATShapeMismatchPolicy::SkipIncompatible){Msg=TEXT("Shape count mismatch; skipped.");return false;} if(Pol==EVehiclePhATShapeMismatchPolicy::ReplaceShapes||Same){T->AggGeom=S->AggGeom; Msg=TEXT("Shapes replaced/copied."); return true;} int32 N; N=FMath::Min(S->AggGeom.BoxElems.Num(),T->AggGeom.BoxElems.Num()); for(int32 i=0;i<N;++i){auto Tr=T->AggGeom.BoxElems[i].GetTransform(); T->AggGeom.BoxElems[i]=S->AggGeom.BoxElems[i]; T->AggGeom.BoxElems[i].SetTransform(Tr);} N=FMath::Min(S->AggGeom.SphereElems.Num(),T->AggGeom.SphereElems.Num()); for(int32 i=0;i<N;++i){auto C=T->AggGeom.SphereElems[i].Center; T->AggGeom.SphereElems[i]=S->AggGeom.SphereElems[i]; T->AggGeom.SphereElems[i].Center=C;} N=FMath::Min(S->AggGeom.SphylElems.Num(),T->AggGeom.SphylElems.Num()); for(int32 i=0;i<N;++i){auto Tr=T->AggGeom.SphylElems[i].GetTransform(); T->AggGeom.SphylElems[i]=S->AggGeom.SphylElems[i]; T->AggGeom.SphylElems[i].SetTransform(Tr);} Msg=TEXT("Common primitive shape settings applied."); return true;}
-bool FVehiclePhATBodyUtils::CopyShapeTransforms(const USkeletalBodySetup* S,USkeletalBodySetup* T,bool L,bool R,bool E,bool All,FString& Msg){ if(!S||!T)return false; auto CopyTr=[&](auto& D,const auto& Src){FTransform DT=D.GetTransform(), ST=Src.GetTransform(); if(L)DT.SetLocation(ST.GetLocation()); if(R)DT.SetRotation(ST.GetRotation()); D.SetTransform(DT);}; int32 N=All?FMath::Min(S->AggGeom.BoxElems.Num(),T->AggGeom.BoxElems.Num()):FMath::Min(1,FMath::Min(S->AggGeom.BoxElems.Num(),T->AggGeom.BoxElems.Num())); for(int32 i=0;i<N;++i){CopyTr(T->AggGeom.BoxElems[i],S->AggGeom.BoxElems[i]); if(E){T->AggGeom.BoxElems[i].X=S->AggGeom.BoxElems[i].X;T->AggGeom.BoxElems[i].Y=S->AggGeom.BoxElems[i].Y;T->AggGeom.BoxElems[i].Z=S->AggGeom.BoxElems[i].Z;}} N=All?FMath::Min(S->AggGeom.SphereElems.Num(),T->AggGeom.SphereElems.Num()):FMath::Min(1,FMath::Min(S->AggGeom.SphereElems.Num(),T->AggGeom.SphereElems.Num())); for(int32 i=0;i<N;++i){if(L)T->AggGeom.SphereElems[i].Center=S->AggGeom.SphereElems[i].Center; if(E)T->AggGeom.SphereElems[i].Radius=S->AggGeom.SphereElems[i].Radius;} N=All?FMath::Min(S->AggGeom.SphylElems.Num(),T->AggGeom.SphylElems.Num()):FMath::Min(1,FMath::Min(S->AggGeom.SphylElems.Num(),T->AggGeom.SphylElems.Num())); for(int32 i=0;i<N;++i){CopyTr(T->AggGeom.SphylElems[i],S->AggGeom.SphylElems[i]); if(E){T->AggGeom.SphylElems[i].Radius=S->AggGeom.SphylElems[i].Radius;T->AggGeom.SphylElems[i].Length=S->AggGeom.SphylElems[i].Length;}} Msg=TEXT("Shape transform pasted."); return true;}
+UPhysicsAsset* FVehiclePhATBodyUtils::GetSelectedPhysicsAsset()
+{
+    const TArray<UPhysicsAsset*> Assets = GetSelectedPhysicsAssets();
+    return Assets.Num() > 0 ? Assets[0] : nullptr;
+}
+
+TArray<UPhysicsAsset*> FVehiclePhATBodyUtils::GetSelectedPhysicsAssets()
+{
+    TArray<UPhysicsAsset*> Result;
+    if (!GEditor)
+    {
+        return Result;
+    }
+
+    USelection* Selection = GEditor->GetSelectedObjects();
+    for (FSelectionIterator It(*Selection); It; ++It)
+    {
+        if (UPhysicsAsset* PhysicsAsset = Cast<UPhysicsAsset>(*It))
+        {
+            Result.Add(PhysicsAsset);
+        }
+    }
+
+    return Result;
+}
+
+USkeletalBodySetup* FVehiclePhATBodyUtils::FindBodySetup(UPhysicsAsset* PhysicsAsset, FName BoneName, int32* OutIndex)
+{
+    if (OutIndex)
+    {
+        *OutIndex = INDEX_NONE;
+    }
+
+    if (!PhysicsAsset)
+    {
+        return nullptr;
+    }
+
+    for (int32 Index = 0; Index < PhysicsAsset->SkeletalBodySetups.Num(); ++Index)
+    {
+        USkeletalBodySetup* BodySetup = PhysicsAsset->SkeletalBodySetups[Index];
+        if (BodySetup && BodySetup->BoneName == BoneName)
+        {
+            if (OutIndex)
+            {
+                *OutIndex = Index;
+            }
+            return BodySetup;
+        }
+    }
+
+    return nullptr;
+}
+
+int32 FVehiclePhATBodyUtils::FindBodySetupIndex(UPhysicsAsset* PhysicsAsset, FName BoneName)
+{
+    int32 Index = INDEX_NONE;
+    FindBodySetup(PhysicsAsset, BoneName, &Index);
+    return Index;
+}
+
+int32 FVehiclePhATBodyUtils::GetShapeCount(const FKAggregateGeom& AggGeom)
+{
+    return AggGeom.SphereElems.Num()
+        + AggGeom.BoxElems.Num()
+        + AggGeom.SphylElems.Num()
+        + AggGeom.TaperedCapsuleElems.Num()
+        + AggGeom.ConvexElems.Num();
+}
+
+bool FVehiclePhATBodyUtils::HasAnyShape(const USkeletalBodySetup* BodySetup)
+{
+    return BodySetup && GetShapeCount(BodySetup->AggGeom) > 0;
+}
+
+TArray<FName> FVehiclePhATBodyUtils::GetSkeletonBoneNames(const UPhysicsAsset* PhysicsAsset)
+{
+    TArray<FName> Result;
+    if (!PhysicsAsset || !PhysicsAsset->PreviewSkeletalMesh)
+    {
+        return Result;
+    }
+
+    const FReferenceSkeleton& ReferenceSkeleton = PhysicsAsset->PreviewSkeletalMesh->GetRefSkeleton();
+    for (int32 Index = 0; Index < ReferenceSkeleton.GetNum(); ++Index)
+    {
+        Result.Add(ReferenceSkeleton.GetBoneName(Index));
+    }
+
+    return Result;
+}
+
+void FVehiclePhATBodyUtils::RefreshPhysicsAsset(UPhysicsAsset* PhysicsAsset)
+{
+    if (!PhysicsAsset)
+    {
+        return;
+    }
+
+    PhysicsAsset->UpdateBodySetupIndexMap();
+    PhysicsAsset->InvalidateAllPhysicsMeshes();
+}
+
+void FVehiclePhATBodyUtils::MarkAssetChanged(UPhysicsAsset* PhysicsAsset)
+{
+    if (!PhysicsAsset)
+    {
+        return;
+    }
+
+    RefreshPhysicsAsset(PhysicsAsset);
+    PhysicsAsset->MarkPackageDirty();
+}
+
+TArray<FVehiclePhATValidationMessage> FVehiclePhATBodyUtils::ValidatePhysicsAsset(UPhysicsAsset* PhysicsAsset, const FString& MirrorSourcePattern, const FString& MirrorTargetPattern)
+{
+    TArray<FVehiclePhATValidationMessage> Messages;
+    if (!PhysicsAsset)
+    {
+        Messages.Add({FVehiclePhATValidationMessage::ESeverity::Error, TEXT("No PhysicsAsset selected.")});
+        return Messages;
+    }
+
+    TSet<FName> BodyBones;
+    for (USkeletalBodySetup* BodySetup : PhysicsAsset->SkeletalBodySetups)
+    {
+        if (!BodySetup)
+        {
+            Messages.Add({FVehiclePhATValidationMessage::ESeverity::Error, TEXT("Null body setup entry.")});
+            continue;
+        }
+
+        BodyBones.Add(BodySetup->BoneName);
+        if (!HasAnyShape(BodySetup))
+        {
+            Messages.Add({FVehiclePhATValidationMessage::ESeverity::Warning, FString::Printf(TEXT("Body '%s' has no shapes."), *BodySetup->BoneName.ToString())});
+        }
+
+        for (const FKBoxElem& Box : BodySetup->AggGeom.BoxElems)
+        {
+            if (Box.X <= KINDA_SMALL_NUMBER || Box.Y <= KINDA_SMALL_NUMBER || Box.Z <= KINDA_SMALL_NUMBER)
+            {
+                Messages.Add({FVehiclePhATValidationMessage::ESeverity::Warning, FString::Printf(TEXT("Body '%s' contains a zero/small box shape."), *BodySetup->BoneName.ToString())});
+            }
+        }
+
+        for (const FKSphereElem& Sphere : BodySetup->AggGeom.SphereElems)
+        {
+            if (Sphere.Radius <= KINDA_SMALL_NUMBER)
+            {
+                Messages.Add({FVehiclePhATValidationMessage::ESeverity::Warning, FString::Printf(TEXT("Body '%s' contains a zero/small sphere shape."), *BodySetup->BoneName.ToString())});
+            }
+        }
+
+        for (const FKSphylElem& Capsule : BodySetup->AggGeom.SphylElems)
+        {
+            if (Capsule.Radius <= KINDA_SMALL_NUMBER || Capsule.Length <= KINDA_SMALL_NUMBER)
+            {
+                Messages.Add({FVehiclePhATValidationMessage::ESeverity::Warning, FString::Printf(TEXT("Body '%s' contains a zero/small capsule shape."), *BodySetup->BoneName.ToString())});
+            }
+        }
+    }
+
+    for (FName BoneName : GetSkeletonBoneNames(PhysicsAsset))
+    {
+        if (!BodyBones.Contains(BoneName))
+        {
+            Messages.Add({FVehiclePhATValidationMessage::ESeverity::Info, FString::Printf(TEXT("Bone '%s' has no body."), *BoneName.ToString())});
+        }
+    }
+
+    TSet<FString> ConstraintKeys;
+    for (UPhysicsConstraintTemplate* ConstraintTemplate : PhysicsAsset->ConstraintSetup)
+    {
+        if (!ConstraintTemplate)
+        {
+            Messages.Add({FVehiclePhATValidationMessage::ESeverity::Warning, TEXT("Null constraint entry.")});
+            continue;
+        }
+
+        const FName Bone1 = ConstraintTemplate->DefaultInstance.ConstraintBone1;
+        const FName Bone2 = ConstraintTemplate->DefaultInstance.ConstraintBone2;
+        if (!BodyBones.Contains(Bone1) || !BodyBones.Contains(Bone2))
+        {
+            Messages.Add({FVehiclePhATValidationMessage::ESeverity::Warning, FString::Printf(TEXT("Constraint '%s' references missing body."), *ConstraintTemplate->GetName())});
+        }
+
+        const FString Key = Bone1.LexicalLess(Bone2)
+            ? Bone1.ToString() + TEXT("|") + Bone2.ToString()
+            : Bone2.ToString() + TEXT("|") + Bone1.ToString();
+
+        if (ConstraintKeys.Contains(Key))
+        {
+            Messages.Add({FVehiclePhATValidationMessage::ESeverity::Warning, FString::Printf(TEXT("Duplicated constraint between %s and %s."), *Bone1.ToString(), *Bone2.ToString())});
+        }
+        ConstraintKeys.Add(Key);
+    }
+
+    UE_LOG(LogVehiclePhATTools, Log, TEXT("Validated %s: %d message(s). Mirror defaults were %s -> %s."), *PhysicsAsset->GetName(), Messages.Num(), *MirrorSourcePattern, *MirrorTargetPattern);
+    return Messages;
+}
+
+bool FVehiclePhATBodyUtils::CopyBodySetupProperties(const USkeletalBodySetup* SourceBody, USkeletalBodySetup* TargetBody)
+{
+    if (!SourceBody || !TargetBody)
+    {
+        return false;
+    }
+
+    const FName TargetBoneName = TargetBody->BoneName;
+    const FKAggregateGeom TargetAggGeom = TargetBody->AggGeom;
+    TargetBody->CopyBodyPropertiesFrom(SourceBody);
+    TargetBody->BoneName = TargetBoneName;
+    TargetBody->AggGeom = TargetAggGeom;
+    return true;
+}
+
+bool FVehiclePhATBodyUtils::CopyBodyShapeSettings(const USkeletalBodySetup* SourceBody, USkeletalBodySetup* TargetBody, EVehiclePhATShapeMismatchPolicy Policy, FString& OutMessage)
+{
+    if (!SourceBody || !TargetBody)
+    {
+        OutMessage = TEXT("Invalid source or target body.");
+        return false;
+    }
+
+    const bool bSameShapeCount = GetShapeCount(SourceBody->AggGeom) == GetShapeCount(TargetBody->AggGeom);
+    if (!bSameShapeCount && Policy == EVehiclePhATShapeMismatchPolicy::SkipIncompatible)
+    {
+        OutMessage = TEXT("Shape count mismatch; skipped.");
+        return false;
+    }
+
+    if (Policy == EVehiclePhATShapeMismatchPolicy::ReplaceShapes || bSameShapeCount)
+    {
+        TargetBody->AggGeom = SourceBody->AggGeom;
+        OutMessage = TEXT("Shapes replaced/copied.");
+        return true;
+    }
+
+    const int32 CommonBoxes = FMath::Min(SourceBody->AggGeom.BoxElems.Num(), TargetBody->AggGeom.BoxElems.Num());
+    for (int32 Index = 0; Index < CommonBoxes; ++Index)
+    {
+        const FTransform ExistingTransform = TargetBody->AggGeom.BoxElems[Index].GetTransform();
+        TargetBody->AggGeom.BoxElems[Index] = SourceBody->AggGeom.BoxElems[Index];
+        TargetBody->AggGeom.BoxElems[Index].SetTransform(ExistingTransform);
+    }
+
+    const int32 CommonSpheres = FMath::Min(SourceBody->AggGeom.SphereElems.Num(), TargetBody->AggGeom.SphereElems.Num());
+    for (int32 Index = 0; Index < CommonSpheres; ++Index)
+    {
+        const FVector ExistingCenter = TargetBody->AggGeom.SphereElems[Index].Center;
+        TargetBody->AggGeom.SphereElems[Index] = SourceBody->AggGeom.SphereElems[Index];
+        TargetBody->AggGeom.SphereElems[Index].Center = ExistingCenter;
+    }
+
+    const int32 CommonCapsules = FMath::Min(SourceBody->AggGeom.SphylElems.Num(), TargetBody->AggGeom.SphylElems.Num());
+    for (int32 Index = 0; Index < CommonCapsules; ++Index)
+    {
+        const FTransform ExistingTransform = TargetBody->AggGeom.SphylElems[Index].GetTransform();
+        TargetBody->AggGeom.SphylElems[Index] = SourceBody->AggGeom.SphylElems[Index];
+        TargetBody->AggGeom.SphylElems[Index].SetTransform(ExistingTransform);
+    }
+
+    OutMessage = TEXT("Common primitive shape settings applied.");
+    return true;
+}
+
+bool FVehiclePhATBodyUtils::CopyShapeTransforms(const USkeletalBodySetup* SourceBody, USkeletalBodySetup* TargetBody, bool bLocation, bool bRotation, bool bScaleExtent, bool bAllShapes, FString& OutMessage)
+{
+    if (!SourceBody || !TargetBody)
+    {
+        OutMessage = TEXT("Invalid source or target body.");
+        return false;
+    }
+
+    auto CopyTransformFields = [bLocation, bRotation](auto& TargetElem, const auto& SourceElem)
+    {
+        FTransform TargetTransform = TargetElem.GetTransform();
+        const FTransform SourceTransform = SourceElem.GetTransform();
+        if (bLocation)
+        {
+            TargetTransform.SetLocation(SourceTransform.GetLocation());
+        }
+        if (bRotation)
+        {
+            TargetTransform.SetRotation(SourceTransform.GetRotation());
+        }
+        TargetElem.SetTransform(TargetTransform);
+    };
+
+    const int32 BoxCount = bAllShapes ? FMath::Min(SourceBody->AggGeom.BoxElems.Num(), TargetBody->AggGeom.BoxElems.Num()) : FMath::Min(1, FMath::Min(SourceBody->AggGeom.BoxElems.Num(), TargetBody->AggGeom.BoxElems.Num()));
+    for (int32 Index = 0; Index < BoxCount; ++Index)
+    {
+        CopyTransformFields(TargetBody->AggGeom.BoxElems[Index], SourceBody->AggGeom.BoxElems[Index]);
+        if (bScaleExtent)
+        {
+            TargetBody->AggGeom.BoxElems[Index].X = SourceBody->AggGeom.BoxElems[Index].X;
+            TargetBody->AggGeom.BoxElems[Index].Y = SourceBody->AggGeom.BoxElems[Index].Y;
+            TargetBody->AggGeom.BoxElems[Index].Z = SourceBody->AggGeom.BoxElems[Index].Z;
+        }
+    }
+
+    const int32 SphereCount = bAllShapes ? FMath::Min(SourceBody->AggGeom.SphereElems.Num(), TargetBody->AggGeom.SphereElems.Num()) : FMath::Min(1, FMath::Min(SourceBody->AggGeom.SphereElems.Num(), TargetBody->AggGeom.SphereElems.Num()));
+    for (int32 Index = 0; Index < SphereCount; ++Index)
+    {
+        if (bLocation)
+        {
+            TargetBody->AggGeom.SphereElems[Index].Center = SourceBody->AggGeom.SphereElems[Index].Center;
+        }
+        if (bScaleExtent)
+        {
+            TargetBody->AggGeom.SphereElems[Index].Radius = SourceBody->AggGeom.SphereElems[Index].Radius;
+        }
+    }
+
+    const int32 CapsuleCount = bAllShapes ? FMath::Min(SourceBody->AggGeom.SphylElems.Num(), TargetBody->AggGeom.SphylElems.Num()) : FMath::Min(1, FMath::Min(SourceBody->AggGeom.SphylElems.Num(), TargetBody->AggGeom.SphylElems.Num()));
+    for (int32 Index = 0; Index < CapsuleCount; ++Index)
+    {
+        CopyTransformFields(TargetBody->AggGeom.SphylElems[Index], SourceBody->AggGeom.SphylElems[Index]);
+        if (bScaleExtent)
+        {
+            TargetBody->AggGeom.SphylElems[Index].Radius = SourceBody->AggGeom.SphylElems[Index].Radius;
+            TargetBody->AggGeom.SphylElems[Index].Length = SourceBody->AggGeom.SphylElems[Index].Length;
+        }
+    }
+
+    OutMessage = TEXT("Shape transform pasted.");
+    return true;
+}

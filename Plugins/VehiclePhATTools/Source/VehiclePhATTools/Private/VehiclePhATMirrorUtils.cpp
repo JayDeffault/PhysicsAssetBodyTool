@@ -1,14 +1,215 @@
 #include "VehiclePhATMirrorUtils.h"
-#include "VehiclePhATBodyUtils.h"
+
+#include "PhysicsEngine/AggregateGeom.h"
 #include "PhysicsEngine/PhysicsAsset.h"
 #include "PhysicsEngine/SkeletalBodySetup.h"
-#include "PhysicsEngine/AggregateGeom.h"
 #include "ScopedTransaction.h"
+#include "VehiclePhATBodyUtils.h"
+#include "VehiclePhATToolsLog.h"
 
-FString FVehiclePhATMirrorUtils::PatternToToken(const FString& P){FString T=P; T.ReplaceInline(TEXT("*"),TEXT("")); return T;}
-FName FVehiclePhATMirrorUtils::MakeTargetName(FName S,const FString& SP,const FString& TP){FString N=S.ToString(); N.ReplaceInline(*PatternToToken(SP),*PatternToToken(TP),ESearchCase::IgnoreCase); return FName(*N);}
-FVector FVehiclePhATMirrorUtils::MirrorVector(const FVector& V,EVehiclePhATMirrorAxis A){FVector R=V; if(A==EVehiclePhATMirrorAxis::X)R.X*=-1; else if(A==EVehiclePhATMirrorAxis::Y)R.Y*=-1; else R.Z*=-1; return R;}
-FQuat FVehiclePhATMirrorUtils::MirrorQuat(const FQuat& Q,EVehiclePhATMirrorAxis A){FMatrix M=FQuatRotationMatrix(Q); FVector X=MirrorVector(M.GetScaledAxis(EAxis::X),A),Y=MirrorVector(M.GetScaledAxis(EAxis::Y),A),Z=MirrorVector(M.GetScaledAxis(EAxis::Z),A); if(A==EVehiclePhATMirrorAxis::X)X*=-1; else if(A==EVehiclePhATMirrorAxis::Y)Y*=-1; else Z*=-1; return FRotationMatrix::MakeFromXZ(X,Z).ToQuat();}
-void FVehiclePhATMirrorUtils::MirrorAggGeom(FKAggregateGeom& G,const FVehiclePhATMirrorOptions& O){auto MT=[&](FTransform T){ if(O.bMirrorLocation)T.SetLocation(MirrorVector(T.GetLocation(),O.Axis)); if(O.bMirrorRotation)T.SetRotation(MirrorQuat(T.GetRotation(),O.Axis)); return T;}; for(auto& E:G.BoxElems)E.SetTransform(MT(E.GetTransform())); for(auto& E:G.SphylElems)E.SetTransform(MT(E.GetTransform())); for(auto& E:G.TaperedCapsuleElems)E.SetTransform(MT(E.GetTransform())); for(auto& E:G.SphereElems)if(O.bMirrorLocation)E.Center=MirrorVector(E.Center,O.Axis); for(auto& E:G.ConvexElems){E.SetTransform(MT(E.GetTransform())); for(FVector& V:E.VertexData)if(O.bMirrorLocation)V=MirrorVector(V,O.Axis); E.UpdateElemBox();}}
-TArray<FVehiclePhATBodyPair> FVehiclePhATMirrorUtils::BuildMirrorPairs(UPhysicsAsset* P,const FVehiclePhATMirrorOptions& O){TArray<FVehiclePhATBodyPair> R; FString Tok=PatternToToken(O.SourcePattern); for(FName B:FVehiclePhATBodyUtils::GetSkeletonBoneNames(P)){ if(!B.ToString().Contains(Tok,ESearchCase::IgnoreCase))continue; FVehiclePhATBodyPair Pair; Pair.SourceBone=B; Pair.TargetBone=MakeTargetName(B,O.SourcePattern,O.TargetPattern); Pair.bSourceBodyExists=FVehiclePhATBodyUtils::FindBodySetup(P,B)!=nullptr; Pair.bTargetBodyExists=FVehiclePhATBodyUtils::FindBodySetup(P,Pair.TargetBone)!=nullptr; Pair.bTargetBoneExists=FVehiclePhATBodyUtils::GetSkeletonBoneNames(P).Contains(Pair.TargetBone); Pair.PreviewText=FString::Printf(TEXT("%s -> %s"),*B.ToString(),*Pair.TargetBone.ToString()); Pair.bSelected=Pair.bSourceBodyExists&&Pair.bTargetBoneExists; R.Add(Pair);} return R;}
-bool FVehiclePhATMirrorUtils::ApplyMirror(UPhysicsAsset* P,const FVehiclePhATMirrorOptions& O,const TArray<FVehiclePhATBodyPair>& Pairs,FString& Msg){ if(!P)return false; FScopedTransaction Tx(NSLOCTEXT("VehiclePhATTools","MirrorBodies","Mirror Vehicle Physics Bodies")); P->Modify(); int32 Count=0; for(const auto& Pair:Pairs){ if(!Pair.bSelected)continue; USkeletalBodySetup* S=FVehiclePhATBodyUtils::FindBodySetup(P,Pair.SourceBone); if(!S)continue; USkeletalBodySetup* T=FVehiclePhATBodyUtils::FindBodySetup(P,Pair.TargetBone); if(T&&!O.bReplaceExistingTargetBodies)continue; if(!T&&O.bCreateMissingTargetBodies){T=NewObject<USkeletalBodySetup>(P,NAME_None,RF_Transactional); P->SkeletalBodySetups.Add(T);} if(!T)continue; T->Modify(); T->CopyBodyPropertiesFrom(S); T->BoneName=Pair.TargetBone; T->AggGeom=S->AggGeom; MirrorAggGeom(T->AggGeom,O); ++Count;} FVehiclePhATBodyUtils::MarkAssetChanged(P); Msg=FString::Printf(TEXT("Mirrored %d bodies."),Count); return Count>0;}
+FString FVehiclePhATMirrorUtils::PatternToToken(const FString& Pattern)
+{
+    FString Token = Pattern;
+    Token.ReplaceInline(TEXT("*"), TEXT(""));
+    return Token;
+}
+
+FName FVehiclePhATMirrorUtils::MakeTargetName(FName SourceName, const FString& SourcePattern, const FString& TargetPattern)
+{
+    FString TargetName = SourceName.ToString();
+    TargetName.ReplaceInline(*PatternToToken(SourcePattern), *PatternToToken(TargetPattern), ESearchCase::IgnoreCase);
+    return FName(*TargetName);
+}
+
+FVector FVehiclePhATMirrorUtils::MirrorVector(const FVector& Value, EVehiclePhATMirrorAxis Axis)
+{
+    FVector Result = Value;
+    if (Axis == EVehiclePhATMirrorAxis::X)
+    {
+        Result.X *= -1.f;
+    }
+    else if (Axis == EVehiclePhATMirrorAxis::Y)
+    {
+        Result.Y *= -1.f;
+    }
+    else
+    {
+        Result.Z *= -1.f;
+    }
+    return Result;
+}
+
+FQuat FVehiclePhATMirrorUtils::MirrorQuat(const FQuat& Value, EVehiclePhATMirrorAxis Axis)
+{
+    const FMatrix RotationMatrix = FQuatRotationMatrix(Value);
+    FVector XAxis = MirrorVector(RotationMatrix.GetScaledAxis(EAxis::X), Axis);
+    FVector ZAxis = MirrorVector(RotationMatrix.GetScaledAxis(EAxis::Z), Axis);
+
+    // Mirroring one axis changes handedness. Flip the mirrored basis vector back so the resulting
+    // matrix remains a valid right-handed rotation rather than a reflection matrix.
+    if (Axis == EVehiclePhATMirrorAxis::X)
+    {
+        XAxis *= -1.f;
+    }
+    else if (Axis == EVehiclePhATMirrorAxis::Z)
+    {
+        ZAxis *= -1.f;
+    }
+    else
+    {
+        XAxis *= -1.f;
+    }
+
+    return FRotationMatrix::MakeFromXZ(XAxis, ZAxis).ToQuat();
+}
+
+void FVehiclePhATMirrorUtils::MirrorAggGeom(FKAggregateGeom& AggGeom, const FVehiclePhATMirrorOptions& Options)
+{
+    auto MirrorTransform = [&Options](FTransform Transform)
+    {
+        if (Options.bMirrorLocation)
+        {
+            Transform.SetLocation(MirrorVector(Transform.GetLocation(), Options.Axis));
+        }
+        if (Options.bMirrorRotation)
+        {
+            Transform.SetRotation(MirrorQuat(Transform.GetRotation(), Options.Axis));
+        }
+        return Transform;
+    };
+
+    for (FKBoxElem& Box : AggGeom.BoxElems)
+    {
+        Box.SetTransform(MirrorTransform(Box.GetTransform()));
+    }
+
+    for (FKSphylElem& Capsule : AggGeom.SphylElems)
+    {
+        Capsule.SetTransform(MirrorTransform(Capsule.GetTransform()));
+    }
+
+    for (FKTaperedCapsuleElem& TaperedCapsule : AggGeom.TaperedCapsuleElems)
+    {
+        TaperedCapsule.SetTransform(MirrorTransform(TaperedCapsule.GetTransform()));
+    }
+
+    for (FKSphereElem& Sphere : AggGeom.SphereElems)
+    {
+        if (Options.bMirrorLocation)
+        {
+            Sphere.Center = MirrorVector(Sphere.Center, Options.Axis);
+        }
+    }
+
+    for (FKConvexElem& Convex : AggGeom.ConvexElems)
+    {
+        Convex.SetTransform(MirrorTransform(Convex.GetTransform()));
+        if (Options.bMirrorLocation)
+        {
+            for (FVector& Vertex : Convex.VertexData)
+            {
+                Vertex = MirrorVector(Vertex, Options.Axis);
+            }
+        }
+        Convex.UpdateElemBox();
+    }
+}
+
+TArray<FVehiclePhATBodyPair> FVehiclePhATMirrorUtils::BuildMirrorPairs(UPhysicsAsset* PhysicsAsset, const FVehiclePhATMirrorOptions& Options)
+{
+    TArray<FVehiclePhATBodyPair> Result;
+    if (!PhysicsAsset)
+    {
+        return Result;
+    }
+
+    const FString SourceToken = PatternToToken(Options.SourcePattern);
+    const TArray<FName> SkeletonBones = FVehiclePhATBodyUtils::GetSkeletonBoneNames(PhysicsAsset);
+    TSet<FName> SkeletonBoneSet;
+    for (FName BoneName : SkeletonBones)
+    {
+        SkeletonBoneSet.Add(BoneName);
+    }
+
+    for (FName SourceBone : SkeletonBones)
+    {
+        if (!SourceBone.ToString().Contains(SourceToken, ESearchCase::IgnoreCase))
+        {
+            continue;
+        }
+
+        FVehiclePhATBodyPair Pair;
+        Pair.SourceBone = SourceBone;
+        Pair.TargetBone = MakeTargetName(SourceBone, Options.SourcePattern, Options.TargetPattern);
+        Pair.bSourceBodyExists = FVehiclePhATBodyUtils::FindBodySetup(PhysicsAsset, SourceBone) != nullptr;
+        Pair.bTargetBodyExists = FVehiclePhATBodyUtils::FindBodySetup(PhysicsAsset, Pair.TargetBone) != nullptr;
+        Pair.bTargetBoneExists = SkeletonBoneSet.Contains(Pair.TargetBone);
+        Pair.PreviewText = FString::Printf(TEXT("%s -> %s"), *SourceBone.ToString(), *Pair.TargetBone.ToString());
+        Pair.bSelected = Pair.bSourceBodyExists && Pair.bTargetBoneExists && Pair.SourceBone != Pair.TargetBone;
+        Result.Add(Pair);
+    }
+
+    return Result;
+}
+
+bool FVehiclePhATMirrorUtils::ApplyMirror(UPhysicsAsset* PhysicsAsset, const FVehiclePhATMirrorOptions& Options, const TArray<FVehiclePhATBodyPair>& Pairs, FString& OutMessage)
+{
+    if (!PhysicsAsset)
+    {
+        OutMessage = TEXT("No PhysicsAsset selected.");
+        return false;
+    }
+
+    FScopedTransaction Transaction(NSLOCTEXT("VehiclePhATTools", "MirrorBodies", "Mirror Vehicle Physics Bodies"));
+    PhysicsAsset->Modify();
+
+    int32 MirroredCount = 0;
+    int32 SkippedCount = 0;
+    for (const FVehiclePhATBodyPair& Pair : Pairs)
+    {
+        if (!Pair.bSelected)
+        {
+            ++SkippedCount;
+            continue;
+        }
+
+        USkeletalBodySetup* SourceBody = FVehiclePhATBodyUtils::FindBodySetup(PhysicsAsset, Pair.SourceBone);
+        if (!SourceBody)
+        {
+            UE_LOG(LogVehiclePhATTools, Warning, TEXT("Cannot mirror %s: source body not found."), *Pair.SourceBone.ToString());
+            ++SkippedCount;
+            continue;
+        }
+
+        USkeletalBodySetup* TargetBody = FVehiclePhATBodyUtils::FindBodySetup(PhysicsAsset, Pair.TargetBone);
+        if (TargetBody && !Options.bReplaceExistingTargetBodies)
+        {
+            UE_LOG(LogVehiclePhATTools, Warning, TEXT("Skipping %s: target body already exists."), *Pair.TargetBone.ToString());
+            ++SkippedCount;
+            continue;
+        }
+
+        if (!TargetBody && Options.bCreateMissingTargetBodies)
+        {
+            TargetBody = NewObject<USkeletalBodySetup>(PhysicsAsset, NAME_None, RF_Transactional);
+            PhysicsAsset->SkeletalBodySetups.Add(TargetBody);
+        }
+
+        if (!TargetBody)
+        {
+            ++SkippedCount;
+            continue;
+        }
+
+        TargetBody->Modify();
+        TargetBody->CopyBodyPropertiesFrom(SourceBody);
+        TargetBody->BoneName = Pair.TargetBone;
+        TargetBody->AggGeom = SourceBody->AggGeom;
+        MirrorAggGeom(TargetBody->AggGeom, Options);
+        ++MirroredCount;
+    }
+
+    FVehiclePhATBodyUtils::MarkAssetChanged(PhysicsAsset);
+    OutMessage = FString::Printf(TEXT("Mirrored %d body/bodies. Skipped %d."), MirroredCount, SkippedCount);
+    return MirroredCount > 0;
+}

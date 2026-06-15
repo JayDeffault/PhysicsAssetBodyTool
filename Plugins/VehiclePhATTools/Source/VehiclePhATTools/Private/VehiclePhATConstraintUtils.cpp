@@ -1,10 +1,130 @@
 #include "VehiclePhATConstraintUtils.h"
-#include "VehiclePhATBodyUtils.h"
+
+#include "PhysicsEngine/ConstraintInstance.h"
 #include "PhysicsEngine/PhysicsAsset.h"
 #include "PhysicsEngine/PhysicsConstraintTemplate.h"
-#include "PhysicsEngine/ConstraintInstance.h"
 #include "ScopedTransaction.h"
+#include "VehiclePhATBodyUtils.h"
+#include "VehiclePhATToolsLog.h"
 
-UPhysicsConstraintTemplate* FVehiclePhATConstraintUtils::FindConstraint(UPhysicsAsset* P,FName A,FName B,int32* Out){if(Out)*Out=INDEX_NONE; if(!P)return nullptr; for(int32 i=0;i<P->ConstraintSetup.Num();++i){auto* C=P->ConstraintSetup[i]; if(!C)continue; FName C1=C->DefaultInstance.ConstraintBone1,C2=C->DefaultInstance.ConstraintBone2; if((C1==A&&C2==B)||(C1==B&&C2==A)){if(Out)*Out=i; return C;}} return nullptr;}
-float FVehiclePhATConstraintUtils::PresetDegrees(EVehiclePhATConstraintPreset P,float C){switch(P){case EVehiclePhATConstraintPreset::Door60:return 60.f;case EVehiclePhATConstraintPreset::Door70:return 70.f;case EVehiclePhATConstraintPreset::Bonnet65:return 65.f;case EVehiclePhATConstraintPreset::Boot70:return 70.f;default:return C;}}
-bool FVehiclePhATConstraintUtils::CreateOrUpdateConstraint(UPhysicsAsset* P,const FVehiclePhATConstraintOptions& O,FString& Msg){ if(!P||!FVehiclePhATBodyUtils::FindBodySetup(P,O.ParentBone)||!FVehiclePhATBodyUtils::FindBodySetup(P,O.ChildBone)){Msg=TEXT("Missing physics asset or body.");return false;} FScopedTransaction Tx(NSLOCTEXT("VehiclePhATTools","CreateConstraint","Create Vehicle Constraint")); P->Modify(); UPhysicsConstraintTemplate* C=FindConstraint(P,O.ParentBone,O.ChildBone); if(C&&!O.bUpdateExisting){Msg=TEXT("Constraint already exists; enable Update Existing.");return false;} if(!C){C=NewObject<UPhysicsConstraintTemplate>(P,NAME_None,RF_Transactional); P->ConstraintSetup.Add(C);} C->Modify(); FConstraintInstance& I=C->DefaultInstance; I.ConstraintBone1=O.ParentBone; I.ConstraintBone2=O.ChildBone; const float Deg=PresetDegrees(O.Preset,O.AngularLimitDegrees); I.SetAngularSwing1Motion(ACM_Limited); I.SetAngularSwing2Motion(ACM_Locked); I.SetAngularTwistMotion(ACM_Locked); I.SetAngularSwing1Limit(ACM_Limited,Deg); I.SetAngularSwing2Limit(ACM_Locked,0.f); I.SetAngularTwistLimit(ACM_Locked,0.f); FRotator R=FRotator::ZeroRotator; if(O.Preset==EVehiclePhATConstraintPreset::Bonnet65||O.Preset==EVehiclePhATConstraintPreset::Boot70)R=FRotator(0,90,0); if(O.bFlipAxis)R.Yaw+=180.f; I.SetRefFrame(EConstraintFrame::Frame1,FTransform(R)); I.SetRefFrame(EConstraintFrame::Frame2,FTransform(R)); FVehiclePhATBodyUtils::MarkAssetChanged(P); Msg=FString::Printf(TEXT("Constraint %s between %s and %s at %.1f degrees."), C->GetOuter()?TEXT("updated/created"):TEXT("created"), *O.ParentBone.ToString(), *O.ChildBone.ToString(), Deg); return true;}
+UPhysicsConstraintTemplate* FVehiclePhATConstraintUtils::FindConstraint(UPhysicsAsset* PhysicsAsset, FName BoneA, FName BoneB, int32* OutIndex)
+{
+    if (OutIndex)
+    {
+        *OutIndex = INDEX_NONE;
+    }
+
+    if (!PhysicsAsset)
+    {
+        return nullptr;
+    }
+
+    for (int32 Index = 0; Index < PhysicsAsset->ConstraintSetup.Num(); ++Index)
+    {
+        UPhysicsConstraintTemplate* ConstraintTemplate = PhysicsAsset->ConstraintSetup[Index];
+        if (!ConstraintTemplate)
+        {
+            continue;
+        }
+
+        const FName ConstraintBone1 = ConstraintTemplate->DefaultInstance.ConstraintBone1;
+        const FName ConstraintBone2 = ConstraintTemplate->DefaultInstance.ConstraintBone2;
+        if ((ConstraintBone1 == BoneA && ConstraintBone2 == BoneB) || (ConstraintBone1 == BoneB && ConstraintBone2 == BoneA))
+        {
+            if (OutIndex)
+            {
+                *OutIndex = Index;
+            }
+            return ConstraintTemplate;
+        }
+    }
+
+    return nullptr;
+}
+
+float FVehiclePhATConstraintUtils::PresetDegrees(EVehiclePhATConstraintPreset Preset, float CustomDegrees)
+{
+    switch (Preset)
+    {
+    case EVehiclePhATConstraintPreset::Door60:
+        return 60.f;
+    case EVehiclePhATConstraintPreset::Door70:
+        return 70.f;
+    case EVehiclePhATConstraintPreset::Bonnet65:
+        return 65.f;
+    case EVehiclePhATConstraintPreset::Boot70:
+        return 70.f;
+    case EVehiclePhATConstraintPreset::Custom:
+    default:
+        return CustomDegrees;
+    }
+}
+
+bool FVehiclePhATConstraintUtils::CreateOrUpdateConstraint(UPhysicsAsset* PhysicsAsset, const FVehiclePhATConstraintOptions& Options, FString& OutMessage)
+{
+    if (!PhysicsAsset)
+    {
+        OutMessage = TEXT("No PhysicsAsset selected.");
+        return false;
+    }
+
+    if (!FVehiclePhATBodyUtils::FindBodySetup(PhysicsAsset, Options.ParentBone) || !FVehiclePhATBodyUtils::FindBodySetup(PhysicsAsset, Options.ChildBone))
+    {
+        OutMessage = TEXT("Parent or child body was not found.");
+        return false;
+    }
+
+    FScopedTransaction Transaction(NSLOCTEXT("VehiclePhATTools", "CreateConstraint", "Create Vehicle Constraint"));
+    PhysicsAsset->Modify();
+
+    const bool bHadExistingConstraint = FindConstraint(PhysicsAsset, Options.ParentBone, Options.ChildBone) != nullptr;
+    UPhysicsConstraintTemplate* ConstraintTemplate = FindConstraint(PhysicsAsset, Options.ParentBone, Options.ChildBone);
+    if (ConstraintTemplate && !Options.bUpdateExisting)
+    {
+        OutMessage = TEXT("Constraint already exists; enable Update Existing before applying.");
+        return false;
+    }
+
+    if (!ConstraintTemplate)
+    {
+        ConstraintTemplate = NewObject<UPhysicsConstraintTemplate>(PhysicsAsset, NAME_None, RF_Transactional);
+        PhysicsAsset->ConstraintSetup.Add(ConstraintTemplate);
+    }
+
+    ConstraintTemplate->Modify();
+    FConstraintInstance& Instance = ConstraintTemplate->DefaultInstance;
+    Instance.ConstraintBone1 = Options.ParentBone;
+    Instance.ConstraintBone2 = Options.ChildBone;
+
+    const float Degrees = PresetDegrees(Options.Preset, Options.AngularLimitDegrees);
+    Instance.SetAngularSwing1Motion(ACM_Limited);
+    Instance.SetAngularSwing2Motion(ACM_Locked);
+    Instance.SetAngularTwistMotion(ACM_Locked);
+    Instance.SetAngularSwing1Limit(ACM_Limited, Degrees);
+    Instance.SetAngularSwing2Limit(ACM_Locked, 0.f);
+    Instance.SetAngularTwistLimit(ACM_Locked, 0.f);
+
+    FRotator FrameRotation = FRotator::ZeroRotator;
+    if (Options.Preset == EVehiclePhATConstraintPreset::Bonnet65 || Options.Preset == EVehiclePhATConstraintPreset::Boot70)
+    {
+        FrameRotation = FRotator(0.f, 90.f, 0.f);
+    }
+    if (Options.bFlipAxis)
+    {
+        FrameRotation.Yaw += 180.f;
+    }
+
+    Instance.SetRefFrame(EConstraintFrame::Frame1, FTransform(FrameRotation));
+    Instance.SetRefFrame(EConstraintFrame::Frame2, FTransform(FrameRotation));
+
+    FVehiclePhATBodyUtils::MarkAssetChanged(PhysicsAsset);
+    OutMessage = FString::Printf(
+        TEXT("Constraint %s between %s and %s at %.1f degrees."),
+        bHadExistingConstraint ? TEXT("updated") : TEXT("created"),
+        *Options.ParentBone.ToString(),
+        *Options.ChildBone.ToString(),
+        Degrees);
+
+    UE_LOG(LogVehiclePhATTools, Log, TEXT("%s"), *OutMessage);
+    return true;
+}
