@@ -103,3 +103,9 @@ For door-style presets, the parent reference frame is biased by the selected ang
 Current MVP 4 coverage includes a safe C++ Slate convex creation dialog. It lets you choose a target body bone, seed an editable local-space point cloud from the current body shape, paste or edit one `X Y Z` point per line, preview the parsed point count, and apply the points as a new `FKConvexElem` through `FVehiclePhATConvexUtils::AddConvexFromPoints` with Undo/Redo support.
 
 The full viewport vertex picker and automatic skeletal-mesh skin-weight vertex selection are still planned follow-up work.
+
+## MVP 5 status
+
+Current MVP 5 coverage includes a safe convex edit workflow. The Convex Edit Tool loads an existing `FKConvexElem` by body bone and convex index, extracts its `VertexData` into an editable local-space point cloud, previews the parsed point count, and rebuilds/replaces the selected convex element through `FVehiclePhATConvexUtils::ReplaceConvexFromPoints` with Undo/Redo support.
+
+Direct viewport vertex dragging and snap-to-skeletal-mesh-vertex editing remain future work.

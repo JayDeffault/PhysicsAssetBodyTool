@@ -538,6 +538,171 @@ private:
     }
 };
 
+class SConvexEditDialog final : public SCompoundWidget
+{
+public:
+    SLATE_BEGIN_ARGS(SConvexEditDialog) {}
+        SLATE_ARGUMENT(UPhysicsAsset*, PhysicsAsset)
+        SLATE_ARGUMENT(FName, DefaultBone)
+    SLATE_END_ARGS()
+
+    void Construct(const FArguments& InArgs)
+    {
+        PhysicsAsset = InArgs._PhysicsAsset;
+        BoneName = InArgs._DefaultBone;
+        LoadCurrentConvex();
+
+        ChildSlot
+        [
+            SNew(SVerticalBox)
+            + SVerticalBox::Slot().AutoHeight().Padding(6)
+            [
+                SNew(STextBlock)
+                .Text(LOCTEXT("ConvexEditHelp", "MVP 5 convex edit: extract existing FKConvexElem vertices, edit the point cloud, then rebuild/replace that convex element. One local-space point per line: X Y Z."))
+                .AutoWrapText(true)
+            ]
+            + SVerticalBox::Slot().AutoHeight().Padding(6)
+            [
+                SNew(SUniformGridPanel).SlotPadding(4)
+                + SUniformGridPanel::Slot(0, 0)
+                [SNew(STextBlock).Text(LOCTEXT("ConvexEditBone", "Body bone"))]
+                + SUniformGridPanel::Slot(1, 0)
+                [SNew(SEditableTextBox).Text(this, &SConvexEditDialog::GetBoneText).OnTextCommitted(this, &SConvexEditDialog::OnBoneCommitted)]
+                + SUniformGridPanel::Slot(0, 1)
+                [SNew(STextBlock).Text(LOCTEXT("ConvexEditIndex", "Convex index"))]
+                + SUniformGridPanel::Slot(1, 1)
+                [SNew(SNumericEntryBox<int32>).Value(this, &SConvexEditDialog::GetConvexIndex).MinValue(0).OnValueChanged(this, &SConvexEditDialog::OnConvexIndexChanged)]
+            ]
+            + SVerticalBox::Slot().FillHeight(1.f).Padding(6)
+            [
+                SAssignNew(PointsTextBox, SMultiLineEditableTextBox)
+                .Text(this, &SConvexEditDialog::GetPointsText)
+            ]
+            + SVerticalBox::Slot().AutoHeight().Padding(6)
+            [SNew(STextBlock).Text(this, &SConvexEditDialog::GetStatusText).AutoWrapText(true)]
+            + SVerticalBox::Slot().AutoHeight().Padding(6)
+            [
+                SNew(SUniformGridPanel).SlotPadding(4)
+                + SUniformGridPanel::Slot(0, 0)
+                [SNew(SButton).Text(LOCTEXT("LoadConvex", "Load Convex")).OnClicked(this, &SConvexEditDialog::OnLoad)]
+                + SUniformGridPanel::Slot(1, 0)
+                [SNew(SButton).Text(LOCTEXT("PreviewEditedConvex", "Preview Points")).OnClicked(this, &SConvexEditDialog::OnPreview)]
+                + SUniformGridPanel::Slot(2, 0)
+                [SNew(SButton).Text(LOCTEXT("ReplaceConvex", "Rebuild / Replace")).OnClicked(this, &SConvexEditDialog::OnReplace)]
+            ]
+        ];
+    }
+
+private:
+    UPhysicsAsset* PhysicsAsset = nullptr;
+    FName BoneName;
+    int32 ConvexIndex = 0;
+    FString PointsText;
+    FString Status;
+    TSharedPtr<SMultiLineEditableTextBox> PointsTextBox;
+
+    FText GetBoneText() const { return FText::FromName(BoneName); }
+    TOptional<int32> GetConvexIndex() const { return ConvexIndex; }
+    FText GetPointsText() const { return FText::FromString(PointsText); }
+    FText GetStatusText() const { return FText::FromString(Status); }
+
+    void OnBoneCommitted(const FText& Text, ETextCommit::Type)
+    {
+        BoneName = VehiclePhATToolsUI::TextToName(Text);
+        ConvexIndex = 0;
+        LoadCurrentConvex();
+        SyncTextBox();
+    }
+
+    void OnConvexIndexChanged(int32 NewValue)
+    {
+        ConvexIndex = FMath::Max(0, NewValue);
+    }
+
+    FReply OnLoad()
+    {
+        LoadCurrentConvex();
+        SyncTextBox();
+        return FReply::Handled();
+    }
+
+    FReply OnPreview()
+    {
+        const TArray<FVector> Points = ParsePointsFromText();
+        Status = FString::Printf(TEXT("Preview edited convex %d on '%s': %d point(s)."), ConvexIndex, *BoneName.ToString(), Points.Num());
+        return FReply::Handled();
+    }
+
+    FReply OnReplace()
+    {
+        USkeletalBodySetup* BodySetup = FVehiclePhATBodyUtils::FindBodySetup(PhysicsAsset, BoneName);
+        if (!BodySetup)
+        {
+            Status = FString::Printf(TEXT("Body '%s' was not found."), *BoneName.ToString());
+            return FReply::Handled();
+        }
+
+        const TArray<FVector> Points = ParsePointsFromText();
+        FString Message;
+        FVehiclePhATConvexUtils::ReplaceConvexFromPoints(PhysicsAsset, BodySetup, ConvexIndex, Points, Message);
+        Status = Message;
+        return FReply::Handled();
+    }
+
+    void LoadCurrentConvex()
+    {
+        PointsText.Reset();
+        const USkeletalBodySetup* BodySetup = FVehiclePhATBodyUtils::FindBodySetup(PhysicsAsset, BoneName);
+        if (!BodySetup)
+        {
+            Status = FString::Printf(TEXT("Body '%s' was not found."), *BoneName.ToString());
+            return;
+        }
+
+        if (!BodySetup->AggGeom.ConvexElems.IsValidIndex(ConvexIndex))
+        {
+            Status = FString::Printf(TEXT("Body '%s' has %d convex element(s); index %d is invalid."), *BoneName.ToString(), BodySetup->AggGeom.ConvexElems.Num(), ConvexIndex);
+            return;
+        }
+
+        const FKConvexElem& Convex = BodySetup->AggGeom.ConvexElems[ConvexIndex];
+        for (const FVector& Vertex : Convex.VertexData)
+        {
+            PointsText += FString::Printf(TEXT("%.3f %.3f %.3f\n"), Vertex.X, Vertex.Y, Vertex.Z);
+        }
+        Status = FString::Printf(TEXT("Loaded convex %d from '%s' with %d vertices."), ConvexIndex, *BoneName.ToString(), Convex.VertexData.Num());
+    }
+
+    void SyncTextBox()
+    {
+        if (PointsTextBox.IsValid())
+        {
+            PointsTextBox->SetText(FText::FromString(PointsText));
+        }
+    }
+
+    TArray<FVector> ParsePointsFromText() const
+    {
+        const FString Source = PointsTextBox.IsValid() ? PointsTextBox->GetText().ToString() : PointsText;
+        TArray<FString> Lines;
+        Source.ParseIntoArrayLines(Lines, true);
+
+        TArray<FVector> Points;
+        for (FString Line : Lines)
+        {
+            Line.ReplaceInline(TEXT(","), TEXT(" "));
+            TArray<FString> Tokens;
+            Line.ParseIntoArrayWS(Tokens);
+            if (Tokens.Num() < 3)
+            {
+                continue;
+            }
+            Points.Add(FVector(FCString::Atof(*Tokens[0]), FCString::Atof(*Tokens[1]), FCString::Atof(*Tokens[2])));
+        }
+        return Points;
+    }
+};
+
 class SVehiclePhATToolsPanel final : public SCompoundWidget
 {
 public:
@@ -751,7 +916,16 @@ private:
 
     FReply OnConvexEdit()
     {
-        Status = TEXT("MVP convex edit: backend can replace FKConvexElem from edited point cloud; interactive editor remains next pass.");
+        if (!PhysicsAsset)
+        {
+            Status = TEXT("No PhysicsAsset selected.");
+            return FReply::Handled();
+        }
+
+        VehiclePhATToolsUI::ShowModalWindow(
+            LOCTEXT("ConvexEditWindowTitle", "Convex Edit Tool"),
+            SNew(SConvexEditDialog).PhysicsAsset(PhysicsAsset).DefaultBone(Bone),
+            FVector2D(700.f, 540.f));
         return FReply::Handled();
     }
 
