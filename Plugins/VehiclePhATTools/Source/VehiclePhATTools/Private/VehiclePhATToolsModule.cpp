@@ -1024,6 +1024,10 @@ public:
                 ]
                 + SVerticalBox::Slot().AutoHeight().Padding(4)
                 [SNew(STextBlock).AutoWrapText(true).Text(this, &SVehiclePhATToolsPanel::GetStatusText)]
+                + SVerticalBox::Slot().AutoHeight().Padding(4)
+                [
+                    SAssignNew(InlineToolHost, SVerticalBox)
+                ]
             ]
         ];
     }
@@ -1033,6 +1037,7 @@ private:
     FName Bone;
     FName ParentBone;
     FString Status;
+    TSharedPtr<SVerticalBox> InlineToolHost;
 
     void RefreshSelection()
     {
@@ -1178,10 +1183,15 @@ private:
             return FReply::Handled();
         }
 
-        VehiclePhATToolsUI::ShowModalWindow(
-            LOCTEXT("ConvexCreationWindowTitle", "Convex Creation Tool"),
-            SNew(SConvexCreationDialog).PhysicsAsset(PhysicsAsset).DefaultBone(Bone),
-            FVector2D(700.f, 540.f));
+        if (InlineToolHost.IsValid())
+        {
+            InlineToolHost->ClearChildren();
+            InlineToolHost->AddSlot().AutoHeight()
+            [
+                SNew(SConvexCreationDialog).PhysicsAsset(PhysicsAsset).DefaultBone(Bone)
+            ];
+            Status = TEXT("Create Convex Bodies is active inline. No modal window was opened.");
+        }
         return FReply::Handled();
     }
 
@@ -1193,10 +1203,15 @@ private:
             return FReply::Handled();
         }
 
-        VehiclePhATToolsUI::ShowModalWindow(
-            LOCTEXT("ConvexEditWindowTitle", "Convex Edit Tool"),
-            SNew(SConvexEditDialog).PhysicsAsset(PhysicsAsset).DefaultBone(Bone),
-            FVector2D(700.f, 540.f));
+        if (InlineToolHost.IsValid())
+        {
+            InlineToolHost->ClearChildren();
+            InlineToolHost->AddSlot().AutoHeight()
+            [
+                SNew(SConvexEditDialog).PhysicsAsset(PhysicsAsset).DefaultBone(Bone)
+            ];
+            Status = TEXT("Edit Convex Bodies is active inline. No modal window was opened.");
+        }
         return FReply::Handled();
     }
 

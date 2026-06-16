@@ -121,3 +121,7 @@ Create Convex Bodies and Edit Convex Bodies now include an MVP visual point view
 ## 3D convex viewport controls
 
 The visual convex point widget now uses a lightweight isometric 3D projection with X/Y/Z axes. Hovered vertices are highlighted yellow. `LMB` on empty space creates a vertex, `LMB` on a highlighted vertex drags/moves it while preserving its current Z value, and `RMB` deletes the highlighted vertex. Use the synchronized text list for exact numeric Z edits until mesh-surface raycast snapping is added.
+
+## Inline convex editing mode
+
+Create Convex Bodies and Edit Convex Bodies no longer open modal windows from the Vehicle PhAT Tools panel. They activate inline inside the panel so the user can keep the Physics Asset Editor viewport visible while placing/editing convex points. The current MVP still uses the plugin's lightweight 3D point widget; true direct placement inside the native PhAT viewport with skeletal-mesh vertex snapping remains the next integration step.
