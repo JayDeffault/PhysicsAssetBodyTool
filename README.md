@@ -117,3 +117,7 @@ Mirror apply now duplicates source body setups for newly created target bodies i
 ## Visual convex point placement
 
 Create Convex Bodies and Edit Convex Bodies now include an MVP visual point viewport. Left-clicking in the viewport adds local-space vertices on the XY plane and immediately synchronizes the editable point list. The text list remains available for precise XYZ edits, including Z values, until a full mesh-surface picking viewport is implemented.
+
+## 3D convex viewport controls
+
+The visual convex point widget now uses a lightweight isometric 3D projection with X/Y/Z axes. Hovered vertices are highlighted yellow. `LMB` on empty space creates a vertex, `LMB` on a highlighted vertex drags/moves it while preserving its current Z value, and `RMB` deletes the highlighted vertex. Use the synchronized text list for exact numeric Z edits until mesh-surface raycast snapping is added.

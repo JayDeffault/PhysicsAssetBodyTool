@@ -379,7 +379,7 @@ public:
             .Padding(4)
             [
                 SNew(STextBlock)
-                .Text(LOCTEXT("ConvexViewportHint", "Visual point viewport: Left Click adds a vertex on local XY plane (Z=0). Edit text for exact XYZ / Z values."))
+                .Text(LOCTEXT("ConvexViewportHint", "3D point viewport: hover highlights a vertex yellow. LMB creates or drags the highlighted vertex. RMB deletes the highlighted vertex. Text can still be used for exact XYZ values."))
                 .AutoWrapText(true)
             ]
         ];
@@ -396,7 +396,6 @@ public:
     {
         const FVector2D Size = AllottedGeometry.GetLocalSize();
         const FVector2D Center = Size * 0.5f;
-        constexpr float Scale = 4.f;
 
         FSlateDrawElement::MakeBox(
             OutDrawElements,
@@ -409,28 +408,33 @@ public:
         ++LayerId;
         for (int32 Grid = -10; Grid <= 10; ++Grid)
         {
-            const float Offset = Grid * 10.f * Scale;
-            TArray<FVector2D> VerticalLine = {FVector2D(Center.X + Offset, 0.f), FVector2D(Center.X + Offset, Size.Y)};
-            TArray<FVector2D> HorizontalLine = {FVector2D(0.f, Center.Y + Offset), FVector2D(Size.X, Center.Y + Offset)};
-            FSlateDrawElement::MakeLines(OutDrawElements, LayerId, AllottedGeometry.ToPaintGeometry(), VerticalLine, ESlateDrawEffect::None, FLinearColor(0.08f, 0.08f, 0.09f, 1.f));
-            FSlateDrawElement::MakeLines(OutDrawElements, LayerId, AllottedGeometry.ToPaintGeometry(), HorizontalLine, ESlateDrawEffect::None, FLinearColor(0.08f, 0.08f, 0.09f, 1.f));
+            TArray<FVector2D> XLine = {ProjectPoint(FVector(-100.f, Grid * 10.f, 0.f), Center), ProjectPoint(FVector(100.f, Grid * 10.f, 0.f), Center)};
+            TArray<FVector2D> YLine = {ProjectPoint(FVector(Grid * 10.f, -100.f, 0.f), Center), ProjectPoint(FVector(Grid * 10.f, 100.f, 0.f), Center)};
+            FSlateDrawElement::MakeLines(OutDrawElements, LayerId, AllottedGeometry.ToPaintGeometry(), XLine, ESlateDrawEffect::None, FLinearColor(0.08f, 0.08f, 0.09f, 1.f));
+            FSlateDrawElement::MakeLines(OutDrawElements, LayerId, AllottedGeometry.ToPaintGeometry(), YLine, ESlateDrawEffect::None, FLinearColor(0.08f, 0.08f, 0.09f, 1.f));
         }
 
-        ++LayerId;
+        DrawAxis(OutDrawElements, AllottedGeometry, LayerId + 1, Center, FVector(90.f, 0.f, 0.f), FLinearColor::Red);
+        DrawAxis(OutDrawElements, AllottedGeometry, LayerId + 1, Center, FVector(0.f, 90.f, 0.f), FLinearColor::Green);
+        DrawAxis(OutDrawElements, AllottedGeometry, LayerId + 1, Center, FVector(0.f, 0.f, 90.f), FLinearColor::Blue);
+
+        LayerId += 2;
         TArray<FVector2D> Polyline;
         if (Points)
         {
-            for (const FVector& Point : *Points)
+            for (int32 Index = 0; Index < Points->Num(); ++Index)
             {
-                const FVector2D ScreenPoint(Center.X + Point.X * Scale, Center.Y - Point.Y * Scale);
+                const FVector& Point = (*Points)[Index];
+                const FVector2D ScreenPoint = ProjectPoint(Point, Center);
                 Polyline.Add(ScreenPoint);
+                const bool bHighlighted = Index == HoveredIndex || Index == DraggedIndex;
                 FSlateDrawElement::MakeBox(
                     OutDrawElements,
                     LayerId + 1,
-                    AllottedGeometry.ToPaintGeometry(FVector2D(6.f), FSlateLayoutTransform(ScreenPoint - FVector2D(3.f))),
+                    AllottedGeometry.ToPaintGeometry(FVector2D(bHighlighted ? 10.f : 7.f), FSlateLayoutTransform(ScreenPoint - FVector2D(bHighlighted ? 5.f : 3.5f))),
                     FCoreStyle::Get().GetBrush("WhiteBrush"),
                     ESlateDrawEffect::None,
-                    FLinearColor(0.1f, 0.65f, 1.f, 1.f));
+                    bHighlighted ? FLinearColor::Yellow : FLinearColor(0.1f, 0.65f, 1.f, 1.f));
             }
         }
 
@@ -444,22 +448,126 @@ public:
 
     virtual FReply OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override
     {
-        if (!Points || MouseEvent.GetEffectingButton() != EKeys::LeftMouseButton)
+        if (!Points)
         {
             return FReply::Unhandled();
         }
 
         const FVector2D LocalPosition = MyGeometry.AbsoluteToLocal(MouseEvent.GetScreenSpacePosition());
-        const FVector2D Center = MyGeometry.GetLocalSize() * 0.5f;
-        constexpr float Scale = 4.f;
-        Points->Add(FVector((LocalPosition.X - Center.X) / Scale, -(LocalPosition.Y - Center.Y) / Scale, 0.f));
-        OnPointsChanged.ExecuteIfBound();
+        UpdateHoveredIndex(MyGeometry, LocalPosition);
+
+        if (MouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
+        {
+            if (Points->IsValidIndex(HoveredIndex))
+            {
+                Points->RemoveAt(HoveredIndex);
+                HoveredIndex = INDEX_NONE;
+                DraggedIndex = INDEX_NONE;
+                OnPointsChanged.ExecuteIfBound();
+            }
+            return FReply::Handled();
+        }
+
+        if (MouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+        {
+            if (Points->IsValidIndex(HoveredIndex))
+            {
+                DraggedIndex = HoveredIndex;
+            }
+            else
+            {
+                Points->Add(UnprojectToXYPlane(MyGeometry, LocalPosition, 0.f));
+                DraggedIndex = Points->Num() - 1;
+                HoveredIndex = DraggedIndex;
+                OnPointsChanged.ExecuteIfBound();
+            }
+
+            return FReply::Handled().CaptureMouse(AsShared());
+        }
+
+        return FReply::Unhandled();
+    }
+
+    virtual FReply OnMouseMove(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override
+    {
+        if (!Points)
+        {
+            return FReply::Unhandled();
+        }
+
+        const FVector2D LocalPosition = MyGeometry.AbsoluteToLocal(MouseEvent.GetScreenSpacePosition());
+        if (Points->IsValidIndex(DraggedIndex) && MouseEvent.IsMouseButtonDown(EKeys::LeftMouseButton))
+        {
+            const float ExistingZ = (*Points)[DraggedIndex].Z;
+            (*Points)[DraggedIndex] = UnprojectToXYPlane(MyGeometry, LocalPosition, ExistingZ);
+            HoveredIndex = DraggedIndex;
+            OnPointsChanged.ExecuteIfBound();
+            return FReply::Handled();
+        }
+
+        UpdateHoveredIndex(MyGeometry, LocalPosition);
         return FReply::Handled();
     }
 
+    virtual FReply OnMouseButtonUp(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override
+    {
+        if (MouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+        {
+            DraggedIndex = INDEX_NONE;
+            return FReply::Handled().ReleaseMouseCapture();
+        }
+
+        return FReply::Unhandled();
+    }
+
 private:
+    static constexpr float ViewScale = 4.f;
     TArray<FVector>* Points = nullptr;
     FSimpleDelegate OnPointsChanged;
+    int32 HoveredIndex = INDEX_NONE;
+    int32 DraggedIndex = INDEX_NONE;
+
+    static FVector2D ProjectPoint(const FVector& Point, const FVector2D& Center)
+    {
+        return FVector2D(
+            Center.X + (Point.X - Point.Y) * ViewScale,
+            Center.Y + (Point.X + Point.Y) * ViewScale * 0.35f - Point.Z * ViewScale);
+    }
+
+    static FVector UnprojectToXYPlane(const FGeometry& Geometry, const FVector2D& LocalPosition, const float Z)
+    {
+        const FVector2D Center = Geometry.GetLocalSize() * 0.5f;
+        const float A = (LocalPosition.X - Center.X) / ViewScale;
+        const float B = (LocalPosition.Y - Center.Y + Z * ViewScale) / (ViewScale * 0.35f);
+        return FVector((A + B) * 0.5f, (B - A) * 0.5f, Z);
+    }
+
+    void UpdateHoveredIndex(const FGeometry& Geometry, const FVector2D& LocalPosition)
+    {
+        HoveredIndex = INDEX_NONE;
+        if (!Points)
+        {
+            return;
+        }
+
+        const FVector2D Center = Geometry.GetLocalSize() * 0.5f;
+        float BestDistanceSquared = FMath::Square(12.f);
+        for (int32 Index = 0; Index < Points->Num(); ++Index)
+        {
+            const float DistanceSquared = FVector2D::DistSquared(ProjectPoint((*Points)[Index], Center), LocalPosition);
+            if (DistanceSquared < BestDistanceSquared)
+            {
+                BestDistanceSquared = DistanceSquared;
+                HoveredIndex = Index;
+            }
+        }
+    }
+
+    static void DrawAxis(FSlateWindowElementList& OutDrawElements, const FGeometry& Geometry, int32 LayerId, const FVector2D& Center, const FVector& Axis, const FLinearColor& Color)
+    {
+        TArray<FVector2D> AxisLine = {ProjectPoint(FVector::ZeroVector, Center), ProjectPoint(Axis, Center)};
+        FSlateDrawElement::MakeLines(OutDrawElements, LayerId, Geometry.ToPaintGeometry(), AxisLine, ESlateDrawEffect::None, Color, true, 2.f);
+    }
 };
 
 class SConvexCreationDialog final : public SCompoundWidget
