@@ -367,6 +367,47 @@ bool FVehiclePhATNativeConvexTool::HandleViewportRayAction(EViewportAction Actio
     return false;
 }
 
+void FVehiclePhATNativeConvexTool::BuildViewportRenderData(TArray<FViewportPoint>& OutPoints, TArray<FViewportSegment>& OutSegments)
+{
+    using namespace VehiclePhATNativeConvexToolState;
+    OutPoints.Reset();
+    OutSegments.Reset();
+
+    if (Mode == EMode::Inactive)
+    {
+        return;
+    }
+
+    for (int32 PointIndex = 0; PointIndex < Points.Num(); ++PointIndex)
+    {
+        const bool bHovered = PointIndex == HoverIndex;
+        FViewportPoint& ViewportPoint = OutPoints.AddDefaulted_GetRef();
+        ViewportPoint.Position = Points[PointIndex];
+        ViewportPoint.bHovered = bHovered;
+        ViewportPoint.Color = bHovered ? FLinearColor::Yellow : FLinearColor(0.1f, 0.65f, 1.f, 1.f);
+        ViewportPoint.Size = bHovered ? 14.f : 9.f;
+    }
+
+    if (Points.Num() < 2)
+    {
+        return;
+    }
+
+    for (int32 PointIndex = 0; PointIndex < Points.Num(); ++PointIndex)
+    {
+        const int32 NextPointIndex = (PointIndex + 1) % Points.Num();
+        if (PointIndex == Points.Num() - 1 && Points.Num() < 3)
+        {
+            break;
+        }
+
+        FViewportSegment& Segment = OutSegments.AddDefaulted_GetRef();
+        Segment.Start = Points[PointIndex];
+        Segment.End = Points[NextPointIndex];
+        Segment.Color = FLinearColor(0.1f, 0.65f, 1.f, 1.f);
+    }
+}
+
 bool FVehiclePhATNativeConvexTool::Apply(FString& OutMessage)
 {
     using namespace VehiclePhATNativeConvexToolState;

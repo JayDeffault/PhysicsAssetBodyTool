@@ -145,3 +145,7 @@ A shared `FVehiclePhATNativeConvexTool` state object now tracks create/edit mode
 ## Native PhAT viewport action mapping
 
 `FVehiclePhATNativeConvexTool::HandleViewportRayAction` now centralizes the intended native viewport behavior: hover updates yellow selection state, primary press moves the hovered point or creates a snapped point, primary drag moves the hovered point, and secondary press deletes the hovered point. A future PhAT viewport client hook should only need to convert mouse input into local-space rays and call this method.
+
+## Native PhAT viewport render data scaffold
+
+`FVehiclePhATNativeConvexTool::BuildViewportRenderData` exports point and closed-segment render data for a future native PhAT viewport overlay. Hovered vertices are exported as yellow/larger points, non-hovered vertices as blue points, and segments close the convex loop when enough points exist.

@@ -23,6 +23,21 @@ public:
         SecondaryPress
     };
 
+    struct FViewportPoint
+    {
+        FVector Position = FVector::ZeroVector;
+        FLinearColor Color = FLinearColor::White;
+        float Size = 8.f;
+        bool bHovered = false;
+    };
+
+    struct FViewportSegment
+    {
+        FVector Start = FVector::ZeroVector;
+        FVector End = FVector::ZeroVector;
+        FLinearColor Color = FLinearColor::White;
+    };
+
     static void StartCreate(UPhysicsAsset* PhysicsAsset, FName BodyBone);
     static void StartEdit(UPhysicsAsset* PhysicsAsset, FName BodyBone, int32 ConvexIndex);
     static void Stop();
@@ -47,6 +62,7 @@ public:
     static bool AddPointFromRay(const FVector& RayOrigin, const FVector& RayDirection, float MaxRayDistance);
     static bool MoveHoveredPointFromRay(const FVector& RayOrigin, const FVector& RayDirection, float MaxRayDistance);
     static bool HandleViewportRayAction(EViewportAction Action, const FVector& RayOrigin, const FVector& RayDirection, float MaxRayDistance, FString& OutMessage);
+    static void BuildViewportRenderData(TArray<FViewportPoint>& OutPoints, TArray<FViewportSegment>& OutSegments);
     static bool Apply(FString& OutMessage);
 
 private:
