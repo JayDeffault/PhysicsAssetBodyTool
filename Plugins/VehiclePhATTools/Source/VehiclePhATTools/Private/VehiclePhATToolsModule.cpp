@@ -13,6 +13,7 @@
 #include "VehiclePhATConstraintUtils.h"
 #include "VehiclePhATConvexUtils.h"
 #include "VehiclePhATMirrorUtils.h"
+#include "VehiclePhATNativeConvexTool.h"
 #include "VehiclePhATToolsLog.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Widgets/SCompoundWidget.h"
@@ -1190,6 +1191,7 @@ private:
 
         if (InlineToolHost.IsValid())
         {
+            FVehiclePhATNativeConvexTool::StartCreate(PhysicsAsset, Bone);
             InlineToolHost->ClearChildren();
             InlineToolHost->AddSlot().AutoHeight()
             [
@@ -1210,6 +1212,7 @@ private:
 
         if (InlineToolHost.IsValid())
         {
+            FVehiclePhATNativeConvexTool::StartEdit(PhysicsAsset, Bone, 0);
             InlineToolHost->ClearChildren();
             InlineToolHost->AddSlot().AutoHeight()
             [

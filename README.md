@@ -129,3 +129,7 @@ Create Convex Bodies and Edit Convex Bodies no longer open modal windows from th
 ## Native PhAT viewport requirement
 
 The requested final workflow is direct interaction in the native Physics Asset Editor viewport, with the Skeletal Mesh visible, camera rotation handled by PhAT, and convex vertices snapped to Skeletal Mesh vertices/surface hits. The current Slate point widget is only a temporary fallback and should be replaced by a Physics Asset Editor viewport/client extension before production use. Convex preview lines are drawn closed so point clouds visually represent a closed hull while editing.
+
+## Native convex tool state scaffold
+
+A shared `FVehiclePhATNativeConvexTool` state object now tracks create/edit mode, active PhysicsAsset/body, convex index, hover index, and editable convex points. This is the bridge point for the next implementation step: wiring native Physics Asset Editor viewport hit-testing to `AddPoint`, `MoveHoveredPoint`, `DeleteHoveredPoint`, and `Apply` so the PhAT viewport can drive the convex workflow directly.
