@@ -42,12 +42,12 @@ bool BuildConstraintFramesFromReferenceSkeleton(
     FTransform& OutParentFrame,
     FTransform& OutChildFrame)
 {
-    if (!PhysicsAsset || !PhysicsAsset->PreviewSkeletalMesh)
+    if (!PhysicsAsset || !PhysicsAsset->PreviewSkeletalMesh.Get())
     {
         return false;
     }
 
-    const FReferenceSkeleton& ReferenceSkeleton = PhysicsAsset->PreviewSkeletalMesh->GetRefSkeleton();
+    const FReferenceSkeleton& ReferenceSkeleton = PhysicsAsset->PreviewSkeletalMesh.Get()->GetRefSkeleton();
     const int32 ParentBoneIndex = ReferenceSkeleton.FindBoneIndex(ParentBone);
     const int32 ChildBoneIndex = ReferenceSkeleton.FindBoneIndex(ChildBone);
     if (ParentBoneIndex == INDEX_NONE || ChildBoneIndex == INDEX_NONE)

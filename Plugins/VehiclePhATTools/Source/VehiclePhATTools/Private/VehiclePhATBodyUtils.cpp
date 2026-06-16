@@ -87,12 +87,12 @@ bool FVehiclePhATBodyUtils::HasAnyShape(const USkeletalBodySetup* BodySetup)
 TArray<FName> FVehiclePhATBodyUtils::GetSkeletonBoneNames(const UPhysicsAsset* PhysicsAsset)
 {
     TArray<FName> Result;
-    if (!PhysicsAsset || !PhysicsAsset->PreviewSkeletalMesh)
+    if (!PhysicsAsset || !PhysicsAsset->PreviewSkeletalMesh.Get())
     {
         return Result;
     }
 
-    const FReferenceSkeleton& ReferenceSkeleton = PhysicsAsset->PreviewSkeletalMesh->GetRefSkeleton();
+    const FReferenceSkeleton& ReferenceSkeleton = PhysicsAsset->PreviewSkeletalMesh.Get()->GetRefSkeleton();
     for (int32 Index = 0; Index < ReferenceSkeleton.GetNum(); ++Index)
     {
         Result.Add(ReferenceSkeleton.GetBoneName(Index));

@@ -142,12 +142,12 @@ bool FVehiclePhATNativeConvexTool::DeleteHoveredPoint()
 bool FVehiclePhATNativeConvexTool::SnapPointToNearestPreviewMeshVertex(const FVector& Point, float MaxSnapDistance, FVector& OutSnappedPoint)
 {
     const UPhysicsAsset* ActivePhysicsAsset = VehiclePhATNativeConvexToolState::PhysicsAsset.Get();
-    if (!ActivePhysicsAsset || !ActivePhysicsAsset->PreviewSkeletalMesh)
+    if (!ActivePhysicsAsset || !ActivePhysicsAsset->PreviewSkeletalMesh.Get())
     {
         return false;
     }
 
-    const USkeletalMesh* SkeletalMesh = ActivePhysicsAsset->PreviewSkeletalMesh;
+    const USkeletalMesh* SkeletalMesh = ActivePhysicsAsset->PreviewSkeletalMesh.Get();
     const FSkeletalMeshRenderData* RenderData = SkeletalMesh->GetResourceForRendering();
     if (!RenderData || RenderData->LODRenderData.Num() == 0)
     {
@@ -190,12 +190,12 @@ bool FVehiclePhATNativeConvexTool::SnapPointToNearestPreviewMeshVertex(const FVe
 bool FVehiclePhATNativeConvexTool::FindNearestPreviewMeshVertexToRay(const FVector& RayOrigin, const FVector& RayDirection, float MaxRayDistance, FVector& OutSnappedPoint, int32& OutVertexIndex)
 {
     const UPhysicsAsset* ActivePhysicsAsset = VehiclePhATNativeConvexToolState::PhysicsAsset.Get();
-    if (!ActivePhysicsAsset || !ActivePhysicsAsset->PreviewSkeletalMesh)
+    if (!ActivePhysicsAsset || !ActivePhysicsAsset->PreviewSkeletalMesh.Get())
     {
         return false;
     }
 
-    const USkeletalMesh* SkeletalMesh = ActivePhysicsAsset->PreviewSkeletalMesh;
+    const USkeletalMesh* SkeletalMesh = ActivePhysicsAsset->PreviewSkeletalMesh.Get();
     const FSkeletalMeshRenderData* RenderData = SkeletalMesh->GetResourceForRendering();
     if (!RenderData || RenderData->LODRenderData.Num() == 0)
     {
