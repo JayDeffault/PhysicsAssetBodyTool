@@ -4,6 +4,7 @@
 
 class UPhysicsAsset;
 class USkeletalBodySetup;
+class FPrimitiveDrawInterface;
 
 class VEHICLEPHATTOOLS_API FVehiclePhATNativeConvexTool
 {
@@ -63,6 +64,7 @@ public:
     static bool MoveHoveredPointFromRay(const FVector& RayOrigin, const FVector& RayDirection, float MaxRayDistance);
     static bool HandleViewportRayAction(EViewportAction Action, const FVector& RayOrigin, const FVector& RayDirection, float MaxRayDistance, FString& OutMessage);
     static void BuildViewportRenderData(TArray<FViewportPoint>& OutPoints, TArray<FViewportSegment>& OutSegments);
+    static void DrawViewportOverlay(FPrimitiveDrawInterface* PDI);
     static bool Apply(FString& OutMessage);
 
 private:

@@ -149,3 +149,7 @@ A shared `FVehiclePhATNativeConvexTool` state object now tracks create/edit mode
 ## Native PhAT viewport render data scaffold
 
 `FVehiclePhATNativeConvexTool::BuildViewportRenderData` exports point and closed-segment render data for a future native PhAT viewport overlay. Hovered vertices are exported as yellow/larger points, non-hovered vertices as blue points, and segments close the convex loop when enough points exist.
+
+## Native PhAT viewport draw hook
+
+`FVehiclePhATNativeConvexTool::DrawViewportOverlay` can be called from a Physics Asset Editor viewport client's draw path with its `FPrimitiveDrawInterface`. It draws the current closed convex segments and point handles using foreground depth priority, including yellow hovered vertices.
