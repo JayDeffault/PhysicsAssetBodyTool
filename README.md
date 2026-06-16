@@ -137,3 +137,7 @@ A shared `FVehiclePhATNativeConvexTool` state object now tracks create/edit mode
 ## Skeletal mesh vertex snapping scaffold
 
 `FVehiclePhATNativeConvexTool` can now snap candidate convex points to the nearest vertex in the preview Skeletal Mesh render data. The native PhAT viewport bridge should call `AddPointSnappedToMesh` / `MoveHoveredPointSnappedToMesh` after converting the viewport hit location into PhysicsAsset local space.
+
+## Native PhAT ray interaction scaffold
+
+`FVehiclePhATNativeConvexTool` also exposes ray-based helpers for the future PhAT viewport client hook: `FindNearestPreviewMeshVertexToRay`, `UpdateHoverFromRay`, `AddPointFromRay`, and `MoveHoveredPointFromRay`. The native viewport integration should pass its mouse ray in PhysicsAsset/SkeletalMesh local space so these helpers can snap directly to the nearest preview mesh vertex.

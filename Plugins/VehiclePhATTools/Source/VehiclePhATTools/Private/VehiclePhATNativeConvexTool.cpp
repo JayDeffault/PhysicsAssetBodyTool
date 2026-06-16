@@ -187,6 +187,124 @@ bool FVehiclePhATNativeConvexTool::SnapPointToNearestPreviewMeshVertex(const FVe
     return true;
 }
 
+bool FVehiclePhATNativeConvexTool::FindNearestPreviewMeshVertexToRay(const FVector& RayOrigin, const FVector& RayDirection, float MaxRayDistance, FVector& OutSnappedPoint, int32& OutVertexIndex)
+{
+    const UPhysicsAsset* ActivePhysicsAsset = VehiclePhATNativeConvexToolState::PhysicsAsset.Get();
+    if (!ActivePhysicsAsset || !ActivePhysicsAsset->PreviewSkeletalMesh)
+    {
+        return false;
+    }
+
+    const USkeletalMesh* SkeletalMesh = ActivePhysicsAsset->PreviewSkeletalMesh;
+    const FSkeletalMeshRenderData* RenderData = SkeletalMesh->GetResourceForRendering();
+    if (!RenderData || RenderData->LODRenderData.Num() == 0)
+    {
+        return false;
+    }
+
+    const FSkeletalMeshLODRenderData& LODData = RenderData->LODRenderData[0];
+    const FPositionVertexBuffer& PositionVertexBuffer = LODData.StaticVertexBuffers.PositionVertexBuffer;
+    if (PositionVertexBuffer.GetNumVertices() == 0)
+    {
+        return false;
+    }
+
+    const FVector SafeRayDirection = RayDirection.GetSafeNormal();
+    if (SafeRayDirection.IsNearlyZero())
+    {
+        return false;
+    }
+
+    const float MaxDistanceSquared = MaxRayDistance > 0.f ? FMath::Square(MaxRayDistance) : TNumericLimits<float>::Max();
+    float BestDistanceSquared = MaxDistanceSquared;
+    bool bFound = false;
+    FVector BestPoint = FVector::ZeroVector;
+    int32 BestIndex = INDEX_NONE;
+
+    for (uint32 VertexIndex = 0; VertexIndex < PositionVertexBuffer.GetNumVertices(); ++VertexIndex)
+    {
+        const FVector VertexPosition(PositionVertexBuffer.VertexPosition(VertexIndex));
+        const FVector RayToVertex = VertexPosition - RayOrigin;
+        const float ProjectedDistance = FVector::DotProduct(RayToVertex, SafeRayDirection);
+        if (ProjectedDistance < 0.f)
+        {
+            continue;
+        }
+
+        const FVector ClosestPointOnRay = RayOrigin + SafeRayDirection * ProjectedDistance;
+        const float DistanceSquared = FVector::DistSquared(VertexPosition, ClosestPointOnRay);
+        if (DistanceSquared <= BestDistanceSquared)
+        {
+            BestDistanceSquared = DistanceSquared;
+            BestPoint = VertexPosition;
+            BestIndex = static_cast<int32>(VertexIndex);
+            bFound = true;
+        }
+    }
+
+    if (!bFound)
+    {
+        return false;
+    }
+
+    OutSnappedPoint = BestPoint;
+    OutVertexIndex = BestIndex;
+    return true;
+}
+
+bool FVehiclePhATNativeConvexTool::UpdateHoverFromRay(const FVector& RayOrigin, const FVector& RayDirection, float MaxRayDistance)
+{
+    FVector SnappedPoint;
+    int32 MeshVertexIndex = INDEX_NONE;
+    if (!FindNearestPreviewMeshVertexToRay(RayOrigin, RayDirection, MaxRayDistance, SnappedPoint, MeshVertexIndex))
+    {
+        VehiclePhATNativeConvexToolState::HoverIndex = INDEX_NONE;
+        return false;
+    }
+
+    float BestPointDistanceSquared = TNumericLimits<float>::Max();
+    int32 BestPointIndex = INDEX_NONE;
+    const TArray<FVector>& Points = VehiclePhATNativeConvexToolState::Points;
+    for (int32 PointIndex = 0; PointIndex < Points.Num(); ++PointIndex)
+    {
+        const float DistanceSquared = FVector::DistSquared(Points[PointIndex], SnappedPoint);
+        if (DistanceSquared < BestPointDistanceSquared)
+        {
+            BestPointDistanceSquared = DistanceSquared;
+            BestPointIndex = PointIndex;
+        }
+    }
+
+    VehiclePhATNativeConvexToolState::HoverIndex = BestPointIndex;
+    return BestPointIndex != INDEX_NONE;
+}
+
+bool FVehiclePhATNativeConvexTool::AddPointFromRay(const FVector& RayOrigin, const FVector& RayDirection, float MaxRayDistance)
+{
+    FVector SnappedPoint;
+    int32 MeshVertexIndex = INDEX_NONE;
+    if (!FindNearestPreviewMeshVertexToRay(RayOrigin, RayDirection, MaxRayDistance, SnappedPoint, MeshVertexIndex))
+    {
+        return false;
+    }
+
+    VehiclePhATNativeConvexToolState::Points.Add(SnappedPoint);
+    VehiclePhATNativeConvexToolState::HoverIndex = VehiclePhATNativeConvexToolState::Points.Num() - 1;
+    return true;
+}
+
+bool FVehiclePhATNativeConvexTool::MoveHoveredPointFromRay(const FVector& RayOrigin, const FVector& RayDirection, float MaxRayDistance)
+{
+    FVector SnappedPoint;
+    int32 MeshVertexIndex = INDEX_NONE;
+    if (!FindNearestPreviewMeshVertexToRay(RayOrigin, RayDirection, MaxRayDistance, SnappedPoint, MeshVertexIndex))
+    {
+        return false;
+    }
+
+    return MoveHoveredPoint(SnappedPoint);
+}
+
 bool FVehiclePhATNativeConvexTool::Apply(FString& OutMessage)
 {
     using namespace VehiclePhATNativeConvexToolState;

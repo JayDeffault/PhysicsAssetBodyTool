@@ -34,6 +34,10 @@ public:
     static bool MoveHoveredPointSnappedToMesh(const FVector& Point, float MaxSnapDistance);
     static bool DeleteHoveredPoint();
     static bool SnapPointToNearestPreviewMeshVertex(const FVector& Point, float MaxSnapDistance, FVector& OutSnappedPoint);
+    static bool FindNearestPreviewMeshVertexToRay(const FVector& RayOrigin, const FVector& RayDirection, float MaxRayDistance, FVector& OutSnappedPoint, int32& OutVertexIndex);
+    static bool UpdateHoverFromRay(const FVector& RayOrigin, const FVector& RayDirection, float MaxRayDistance);
+    static bool AddPointFromRay(const FVector& RayOrigin, const FVector& RayDirection, float MaxRayDistance);
+    static bool MoveHoveredPointFromRay(const FVector& RayOrigin, const FVector& RayDirection, float MaxRayDistance);
     static bool Apply(FString& OutMessage);
 
 private:
