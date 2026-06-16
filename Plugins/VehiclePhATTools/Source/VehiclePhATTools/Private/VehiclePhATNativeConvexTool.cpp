@@ -4,7 +4,6 @@
 #include "PhysicsEngine/SkeletalBodySetup.h"
 #include "PhysicsEngine/AggregateGeom.h"
 #include "Engine/SkeletalMesh.h"
-#include "PrimitiveDrawInterface.h"
 #include "Rendering/SkeletalMeshRenderData.h"
 #include "VehiclePhATBodyUtils.h"
 #include "VehiclePhATConvexUtils.h"
@@ -406,28 +405,6 @@ void FVehiclePhATNativeConvexTool::BuildViewportRenderData(TArray<FViewportPoint
         Segment.Start = Points[PointIndex];
         Segment.End = Points[NextPointIndex];
         Segment.Color = FLinearColor(0.1f, 0.65f, 1.f, 1.f);
-    }
-}
-
-void FVehiclePhATNativeConvexTool::DrawViewportOverlay(FPrimitiveDrawInterface* PDI)
-{
-    if (!PDI)
-    {
-        return;
-    }
-
-    TArray<FViewportPoint> ViewportPoints;
-    TArray<FViewportSegment> ViewportSegments;
-    BuildViewportRenderData(ViewportPoints, ViewportSegments);
-
-    for (const FViewportSegment& Segment : ViewportSegments)
-    {
-        PDI->DrawLine(Segment.Start, Segment.End, Segment.Color, SDPG_Foreground, 2.f);
-    }
-
-    for (const FViewportPoint& Point : ViewportPoints)
-    {
-        PDI->DrawPoint(Point.Position, Point.Color, Point.Size, SDPG_Foreground);
     }
 }
 

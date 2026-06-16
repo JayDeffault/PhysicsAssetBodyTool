@@ -152,4 +152,4 @@ A shared `FVehiclePhATNativeConvexTool` state object now tracks create/edit mode
 
 ## Native PhAT viewport draw hook
 
-`FVehiclePhATNativeConvexTool::DrawViewportOverlay` can be called from a Physics Asset Editor viewport client's draw path with its `FPrimitiveDrawInterface`. It draws the current closed convex segments and point handles using foreground depth priority, including yellow hovered vertices.
+Use `FVehiclePhATNativeConvexTool::BuildViewportRenderData` from a Physics Asset Editor viewport draw path and draw the returned points/segments with whatever draw API is available in that viewport module. This avoids including private or version-specific viewport draw headers from the plugin public API.
