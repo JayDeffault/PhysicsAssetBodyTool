@@ -125,3 +125,7 @@ The visual convex point widget now uses a lightweight isometric 3D projection wi
 ## Inline convex editing mode
 
 Create Convex Bodies and Edit Convex Bodies no longer open modal windows from the Vehicle PhAT Tools panel. They activate inline inside the panel so the user can keep the Physics Asset Editor viewport visible while placing/editing convex points. The current MVP still uses the plugin's lightweight 3D point widget; true direct placement inside the native PhAT viewport with skeletal-mesh vertex snapping remains the next integration step.
+
+## Native PhAT viewport requirement
+
+The requested final workflow is direct interaction in the native Physics Asset Editor viewport, with the Skeletal Mesh visible, camera rotation handled by PhAT, and convex vertices snapped to Skeletal Mesh vertices/surface hits. The current Slate point widget is only a temporary fallback and should be replaced by a Physics Asset Editor viewport/client extension before production use. Convex preview lines are drawn closed so point clouds visually represent a closed hull while editing.

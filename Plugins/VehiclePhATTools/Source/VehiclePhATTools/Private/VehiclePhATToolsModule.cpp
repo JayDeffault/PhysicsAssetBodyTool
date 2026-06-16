@@ -440,7 +440,12 @@ public:
 
         if (Polyline.Num() > 1)
         {
-            FSlateDrawElement::MakeLines(OutDrawElements, LayerId, AllottedGeometry.ToPaintGeometry(), Polyline, ESlateDrawEffect::None, FLinearColor(0.1f, 0.65f, 1.f, 1.f), true, 1.5f);
+            TArray<FVector2D> ClosedPolyline = Polyline;
+            if (ClosedPolyline.Num() > 2)
+            {
+                ClosedPolyline.Add(ClosedPolyline[0]);
+            }
+            FSlateDrawElement::MakeLines(OutDrawElements, LayerId, AllottedGeometry.ToPaintGeometry(), ClosedPolyline, ESlateDrawEffect::None, FLinearColor(0.1f, 0.65f, 1.f, 1.f), true, 1.5f);
         }
 
         return LayerId + 2;
