@@ -113,3 +113,7 @@ Direct viewport vertex dragging and snap-to-skeletal-mesh-vertex editing remain 
 ## Mirror troubleshooting notes
 
 Mirror apply now duplicates source body setups for newly created target bodies instead of constructing blank body setups first, invalidates target body physics data after mirrored geometry is assigned, and drops invalid mirrored convex elements with fewer than four vertices or NaN coordinates. These guards are intended to avoid debugger breakpoints/asserts during mirror while still creating valid mirrored bodies.
+
+## Visual convex point placement
+
+Create Convex Bodies and Edit Convex Bodies now include an MVP visual point viewport. Left-clicking in the viewport adds local-space vertices on the XY plane and immediately synchronizes the editable point list. The text list remains available for precise XYZ edits, including Z values, until a full mesh-surface picking viewport is implemented.

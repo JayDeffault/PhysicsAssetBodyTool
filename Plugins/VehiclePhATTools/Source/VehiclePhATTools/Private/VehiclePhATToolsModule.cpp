@@ -1,11 +1,13 @@
 #include "VehiclePhATToolsModule.h"
 
 #include "Framework/Application/SlateApplication.h"
+#include "InputCoreTypes.h"
 #include "PhysicsEngine/AggregateGeom.h"
 #include "PhysicsEngine/PhysicsAsset.h"
 #include "PhysicsEngine/SkeletalBodySetup.h"
 #include "ScopedTransaction.h"
 #include "ToolMenus.h"
+#include "Styling/CoreStyle.h"
 #include "VehiclePhATBodyUtils.h"
 #include "VehiclePhATClipboard.h"
 #include "VehiclePhATConstraintUtils.h"
@@ -20,11 +22,14 @@
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Input/SMultiLineEditableTextBox.h"
 #include "Widgets/Input/SNumericEntryBox.h"
+#include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScrollBox.h"
+#include "Widgets/Layout/SBorder.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Layout/SUniformGridPanel.h"
 #include "Widgets/SWindow.h"
 #include "Widgets/Text/STextBlock.h"
+#include "Rendering/DrawElements.h"
 
 #define LOCTEXT_NAMESPACE "VehiclePhATTools"
 
@@ -356,6 +361,107 @@ private:
     }
 };
 
+class SConvexPointViewport final : public SCompoundWidget
+{
+public:
+    SLATE_BEGIN_ARGS(SConvexPointViewport) {}
+        SLATE_ARGUMENT(TArray<FVector>*, Points)
+        SLATE_EVENT(FSimpleDelegate, OnPointsChanged)
+    SLATE_END_ARGS()
+
+    void Construct(const FArguments& InArgs)
+    {
+        Points = InArgs._Points;
+        OnPointsChanged = InArgs._OnPointsChanged;
+        ChildSlot
+        [
+            SNew(SBorder)
+            .Padding(4)
+            [
+                SNew(STextBlock)
+                .Text(LOCTEXT("ConvexViewportHint", "Visual point viewport: Left Click adds a vertex on local XY plane (Z=0). Edit text for exact XYZ / Z values."))
+                .AutoWrapText(true)
+            ]
+        ];
+    }
+
+    virtual int32 OnPaint(
+        const FPaintArgs& Args,
+        const FGeometry& AllottedGeometry,
+        const FSlateRect& MyCullingRect,
+        FSlateWindowElementList& OutDrawElements,
+        int32 LayerId,
+        const FWidgetStyle& InWidgetStyle,
+        bool bParentEnabled) const override
+    {
+        const FVector2D Size = AllottedGeometry.GetLocalSize();
+        const FVector2D Center = Size * 0.5f;
+        constexpr float Scale = 4.f;
+
+        FSlateDrawElement::MakeBox(
+            OutDrawElements,
+            LayerId,
+            AllottedGeometry.ToPaintGeometry(),
+            FCoreStyle::Get().GetBrush("WhiteBrush"),
+            ESlateDrawEffect::None,
+            FLinearColor(0.015f, 0.015f, 0.018f, 1.f));
+
+        ++LayerId;
+        for (int32 Grid = -10; Grid <= 10; ++Grid)
+        {
+            const float Offset = Grid * 10.f * Scale;
+            TArray<FVector2D> VerticalLine = {FVector2D(Center.X + Offset, 0.f), FVector2D(Center.X + Offset, Size.Y)};
+            TArray<FVector2D> HorizontalLine = {FVector2D(0.f, Center.Y + Offset), FVector2D(Size.X, Center.Y + Offset)};
+            FSlateDrawElement::MakeLines(OutDrawElements, LayerId, AllottedGeometry.ToPaintGeometry(), VerticalLine, ESlateDrawEffect::None, FLinearColor(0.08f, 0.08f, 0.09f, 1.f));
+            FSlateDrawElement::MakeLines(OutDrawElements, LayerId, AllottedGeometry.ToPaintGeometry(), HorizontalLine, ESlateDrawEffect::None, FLinearColor(0.08f, 0.08f, 0.09f, 1.f));
+        }
+
+        ++LayerId;
+        TArray<FVector2D> Polyline;
+        if (Points)
+        {
+            for (const FVector& Point : *Points)
+            {
+                const FVector2D ScreenPoint(Center.X + Point.X * Scale, Center.Y - Point.Y * Scale);
+                Polyline.Add(ScreenPoint);
+                FSlateDrawElement::MakeBox(
+                    OutDrawElements,
+                    LayerId + 1,
+                    AllottedGeometry.ToPaintGeometry(FVector2D(6.f), FSlateLayoutTransform(ScreenPoint - FVector2D(3.f))),
+                    FCoreStyle::Get().GetBrush("WhiteBrush"),
+                    ESlateDrawEffect::None,
+                    FLinearColor(0.1f, 0.65f, 1.f, 1.f));
+            }
+        }
+
+        if (Polyline.Num() > 1)
+        {
+            FSlateDrawElement::MakeLines(OutDrawElements, LayerId, AllottedGeometry.ToPaintGeometry(), Polyline, ESlateDrawEffect::None, FLinearColor(0.1f, 0.65f, 1.f, 1.f), true, 1.5f);
+        }
+
+        return LayerId + 2;
+    }
+
+    virtual FReply OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override
+    {
+        if (!Points || MouseEvent.GetEffectingButton() != EKeys::LeftMouseButton)
+        {
+            return FReply::Unhandled();
+        }
+
+        const FVector2D LocalPosition = MyGeometry.AbsoluteToLocal(MouseEvent.GetScreenSpacePosition());
+        const FVector2D Center = MyGeometry.GetLocalSize() * 0.5f;
+        constexpr float Scale = 4.f;
+        Points->Add(FVector((LocalPosition.X - Center.X) / Scale, -(LocalPosition.Y - Center.Y) / Scale, 0.f));
+        OnPointsChanged.ExecuteIfBound();
+        return FReply::Handled();
+    }
+
+private:
+    TArray<FVector>* Points = nullptr;
+    FSimpleDelegate OnPointsChanged;
+};
+
 class SConvexCreationDialog final : public SCompoundWidget
 {
 public:
@@ -387,6 +493,16 @@ public:
                 + SUniformGridPanel::Slot(1, 0)
                 [SNew(SEditableTextBox).Text(this, &SConvexCreationDialog::GetBoneText).OnTextCommitted(this, &SConvexCreationDialog::OnBoneCommitted)]
             ]
+            + SVerticalBox::Slot().AutoHeight().Padding(6)
+            [
+                SNew(SBox)
+                .HeightOverride(220.f)
+                [
+                    SNew(SConvexPointViewport)
+                    .Points(&VisualPoints)
+                    .OnPointsChanged(FSimpleDelegate::CreateSP(this, &SConvexCreationDialog::SyncTextFromViewport))
+                ]
+            ]
             + SVerticalBox::Slot().FillHeight(1.f).Padding(6)
             [
                 SAssignNew(PointsTextBox, SMultiLineEditableTextBox)
@@ -412,6 +528,7 @@ private:
     FName BoneName;
     FString PointsText;
     FString Status;
+    TArray<FVector> VisualPoints;
     TSharedPtr<SMultiLineEditableTextBox> PointsTextBox;
 
     FText GetBoneText() const { return FText::FromName(BoneName); }
@@ -441,6 +558,7 @@ private:
     FReply OnPreview()
     {
         const TArray<FVector> Points = ParsePointsFromText();
+        VisualPoints = Points;
         Status = FString::Printf(TEXT("Preview: %d point(s). At least 4 non-coplanar points are required."), Points.Num());
         return FReply::Handled();
     }
@@ -516,6 +634,7 @@ private:
         }
 
         PointsText.Reset();
+        VisualPoints = Points;
         for (const FVector& Point : Points)
         {
             PointsText += FString::Printf(TEXT("%.3f %.3f %.3f\n"), Point.X, Point.Y, Point.Z);
@@ -535,6 +654,21 @@ private:
                 }
             }
         }
+    }
+
+    void SyncTextFromViewport()
+    {
+        PointsText.Reset();
+        for (const FVector& Point : VisualPoints)
+        {
+            PointsText += FString::Printf(TEXT("%.3f %.3f %.3f\n"), Point.X, Point.Y, Point.Z);
+        }
+
+        if (PointsTextBox.IsValid())
+        {
+            PointsTextBox->SetText(FText::FromString(PointsText));
+        }
+        Status = FString::Printf(TEXT("Viewport point count: %d"), VisualPoints.Num());
     }
 };
 
@@ -573,6 +707,16 @@ public:
                 + SUniformGridPanel::Slot(1, 1)
                 [SNew(SNumericEntryBox<int32>).Value(this, &SConvexEditDialog::GetConvexIndex).MinValue(0).OnValueChanged(this, &SConvexEditDialog::OnConvexIndexChanged)]
             ]
+            + SVerticalBox::Slot().AutoHeight().Padding(6)
+            [
+                SNew(SBox)
+                .HeightOverride(220.f)
+                [
+                    SNew(SConvexPointViewport)
+                    .Points(&VisualPoints)
+                    .OnPointsChanged(FSimpleDelegate::CreateSP(this, &SConvexEditDialog::SyncTextFromViewport))
+                ]
+            ]
             + SVerticalBox::Slot().FillHeight(1.f).Padding(6)
             [
                 SAssignNew(PointsTextBox, SMultiLineEditableTextBox)
@@ -599,6 +743,7 @@ private:
     int32 ConvexIndex = 0;
     FString PointsText;
     FString Status;
+    TArray<FVector> VisualPoints;
     TSharedPtr<SMultiLineEditableTextBox> PointsTextBox;
 
     FText GetBoneText() const { return FText::FromName(BoneName); }
@@ -629,6 +774,7 @@ private:
     FReply OnPreview()
     {
         const TArray<FVector> Points = ParsePointsFromText();
+        VisualPoints = Points;
         Status = FString::Printf(TEXT("Preview edited convex %d on '%s': %d point(s)."), ConvexIndex, *BoneName.ToString(), Points.Num());
         return FReply::Handled();
     }
@@ -652,6 +798,7 @@ private:
     void LoadCurrentConvex()
     {
         PointsText.Reset();
+        VisualPoints.Reset();
         const USkeletalBodySetup* BodySetup = FVehiclePhATBodyUtils::FindBodySetup(PhysicsAsset, BoneName);
         if (!BodySetup)
         {
@@ -668,6 +815,7 @@ private:
         const FKConvexElem& Convex = BodySetup->AggGeom.ConvexElems[ConvexIndex];
         for (const FVector& Vertex : Convex.VertexData)
         {
+            VisualPoints.Add(Vertex);
             PointsText += FString::Printf(TEXT("%.3f %.3f %.3f\n"), Vertex.X, Vertex.Y, Vertex.Z);
         }
         Status = FString::Printf(TEXT("Loaded convex %d from '%s' with %d vertices."), ConvexIndex, *BoneName.ToString(), Convex.VertexData.Num());
@@ -700,6 +848,21 @@ private:
             Points.Add(FVector(FCString::Atof(*Tokens[0]), FCString::Atof(*Tokens[1]), FCString::Atof(*Tokens[2])));
         }
         return Points;
+    }
+
+    void SyncTextFromViewport()
+    {
+        PointsText.Reset();
+        for (const FVector& Point : VisualPoints)
+        {
+            PointsText += FString::Printf(TEXT("%.3f %.3f %.3f\n"), Point.X, Point.Y, Point.Z);
+        }
+
+        if (PointsTextBox.IsValid())
+        {
+            PointsTextBox->SetText(FText::FromString(PointsText));
+        }
+        Status = FString::Printf(TEXT("Viewport edited convex %d point count: %d"), ConvexIndex, VisualPoints.Num());
     }
 };
 
