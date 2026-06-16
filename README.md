@@ -97,3 +97,9 @@ The remaining work after MVP 3 is the interactive convex creation/editing workfl
 MVP 3 constraint creation now places the generated constraint frames at the selected child bone relative to the selected parent bone using the preview skeletal mesh reference skeleton. This avoids creating a new constraint with both reference frame positions at local `(0, 0, 0)`, which can cause the joint to appear at the skeletal mesh origin when simulation starts.
 
 For door-style presets, the parent reference frame is biased by the selected angular limit around yaw so a 60/70 degree hinge behaves like an outward range instead of a symmetric inward/outward range. Bonnet/Boot presets use a vertical hinge bias. All newly created or updated vehicle constraints have `Disable Collision` enabled by default, with a checkbox in the dialog if you need to turn it off.
+
+## MVP 4 status
+
+Current MVP 4 coverage includes a safe C++ Slate convex creation dialog. It lets you choose a target body bone, seed an editable local-space point cloud from the current body shape, paste or edit one `X Y Z` point per line, preview the parsed point count, and apply the points as a new `FKConvexElem` through `FVehiclePhATConvexUtils::AddConvexFromPoints` with Undo/Redo support.
+
+The full viewport vertex picker and automatic skeletal-mesh skin-weight vertex selection are still planned follow-up work.

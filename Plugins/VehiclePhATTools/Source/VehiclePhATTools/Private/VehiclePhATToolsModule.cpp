@@ -18,6 +18,7 @@
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SComboBox.h"
 #include "Widgets/Input/SEditableTextBox.h"
+#include "Widgets/Input/SMultiLineEditableTextBox.h"
 #include "Widgets/Input/SNumericEntryBox.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/SBoxPanel.h"
@@ -355,6 +356,188 @@ private:
     }
 };
 
+class SConvexCreationDialog final : public SCompoundWidget
+{
+public:
+    SLATE_BEGIN_ARGS(SConvexCreationDialog) {}
+        SLATE_ARGUMENT(UPhysicsAsset*, PhysicsAsset)
+        SLATE_ARGUMENT(FName, DefaultBone)
+    SLATE_END_ARGS()
+
+    void Construct(const FArguments& InArgs)
+    {
+        PhysicsAsset = InArgs._PhysicsAsset;
+        BoneName = InArgs._DefaultBone;
+        SeedPointsFromCurrentBody();
+
+        ChildSlot
+        [
+            SNew(SVerticalBox)
+            + SVerticalBox::Slot().AutoHeight().Padding(6)
+            [
+                SNew(STextBlock)
+                .Text(LOCTEXT("ConvexCreateHelp", "MVP 4 convex creation: select a body bone, edit/paste local-space point coordinates, preview count, then apply as FKConvexElem. One point per line: X Y Z."))
+                .AutoWrapText(true)
+            ]
+            + SVerticalBox::Slot().AutoHeight().Padding(6)
+            [
+                SNew(SUniformGridPanel).SlotPadding(4)
+                + SUniformGridPanel::Slot(0, 0)
+                [SNew(STextBlock).Text(LOCTEXT("ConvexBone", "Target body bone"))]
+                + SUniformGridPanel::Slot(1, 0)
+                [SNew(SEditableTextBox).Text(this, &SConvexCreationDialog::GetBoneText).OnTextCommitted(this, &SConvexCreationDialog::OnBoneCommitted)]
+            ]
+            + SVerticalBox::Slot().FillHeight(1.f).Padding(6)
+            [
+                SAssignNew(PointsTextBox, SMultiLineEditableTextBox)
+                .Text(this, &SConvexCreationDialog::GetPointsText)
+            ]
+            + SVerticalBox::Slot().AutoHeight().Padding(6)
+            [SNew(STextBlock).Text(this, &SConvexCreationDialog::GetStatusText).AutoWrapText(true)]
+            + SVerticalBox::Slot().AutoHeight().Padding(6)
+            [
+                SNew(SUniformGridPanel).SlotPadding(4)
+                + SUniformGridPanel::Slot(0, 0)
+                [SNew(SButton).Text(LOCTEXT("SeedConvex", "Seed From Body Shape")).OnClicked(this, &SConvexCreationDialog::OnSeedFromBody)]
+                + SUniformGridPanel::Slot(1, 0)
+                [SNew(SButton).Text(LOCTEXT("PreviewConvex", "Preview Points")).OnClicked(this, &SConvexCreationDialog::OnPreview)]
+                + SUniformGridPanel::Slot(2, 0)
+                [SNew(SButton).Text(LOCTEXT("ApplyConvex", "Apply Convex")).OnClicked(this, &SConvexCreationDialog::OnApply)]
+            ]
+        ];
+    }
+
+private:
+    UPhysicsAsset* PhysicsAsset = nullptr;
+    FName BoneName;
+    FString PointsText;
+    FString Status;
+    TSharedPtr<SMultiLineEditableTextBox> PointsTextBox;
+
+    FText GetBoneText() const { return FText::FromName(BoneName); }
+    FText GetPointsText() const { return FText::FromString(PointsText); }
+    FText GetStatusText() const { return FText::FromString(Status); }
+
+    void OnBoneCommitted(const FText& Text, ETextCommit::Type)
+    {
+        BoneName = VehiclePhATToolsUI::TextToName(Text);
+        SeedPointsFromCurrentBody();
+        if (PointsTextBox.IsValid())
+        {
+            PointsTextBox->SetText(FText::FromString(PointsText));
+        }
+    }
+
+    FReply OnSeedFromBody()
+    {
+        SeedPointsFromCurrentBody();
+        if (PointsTextBox.IsValid())
+        {
+            PointsTextBox->SetText(FText::FromString(PointsText));
+        }
+        return FReply::Handled();
+    }
+
+    FReply OnPreview()
+    {
+        const TArray<FVector> Points = ParsePointsFromText();
+        Status = FString::Printf(TEXT("Preview: %d point(s). At least 4 non-coplanar points are required."), Points.Num());
+        return FReply::Handled();
+    }
+
+    FReply OnApply()
+    {
+        const TArray<FVector> Points = ParsePointsFromText();
+        if (USkeletalBodySetup* BodySetup = FVehiclePhATBodyUtils::FindBodySetup(PhysicsAsset, BoneName))
+        {
+            FString Message;
+            FVehiclePhATConvexUtils::AddConvexFromPoints(PhysicsAsset, BodySetup, Points, Message);
+            Status = Message;
+        }
+        else
+        {
+            Status = FString::Printf(TEXT("Body '%s' was not found."), *BoneName.ToString());
+        }
+        return FReply::Handled();
+    }
+
+    TArray<FVector> ParsePointsFromText() const
+    {
+        const FString Source = PointsTextBox.IsValid() ? PointsTextBox->GetText().ToString() : PointsText;
+        TArray<FString> Lines;
+        Source.ParseIntoArrayLines(Lines, true);
+
+        TArray<FVector> Points;
+        for (FString Line : Lines)
+        {
+            Line.ReplaceInline(TEXT(","), TEXT(" "));
+            TArray<FString> Tokens;
+            Line.ParseIntoArrayWS(Tokens);
+            if (Tokens.Num() < 3)
+            {
+                continue;
+            }
+
+            Points.Add(FVector(FCString::Atof(*Tokens[0]), FCString::Atof(*Tokens[1]), FCString::Atof(*Tokens[2])));
+        }
+        return Points;
+    }
+
+    void SeedPointsFromCurrentBody()
+    {
+        const USkeletalBodySetup* BodySetup = FVehiclePhATBodyUtils::FindBodySetup(PhysicsAsset, BoneName);
+        TArray<FVector> Points;
+
+        if (BodySetup && BodySetup->AggGeom.BoxElems.Num() > 0)
+        {
+            const FKBoxElem& Box = BodySetup->AggGeom.BoxElems[0];
+            const FVector HalfExtents(Box.X * 0.5f, Box.Y * 0.5f, Box.Z * 0.5f);
+            const FTransform BoxTransform = Box.GetTransform();
+            for (const float XSign : {-1.f, 1.f})
+            {
+                for (const float YSign : {-1.f, 1.f})
+                {
+                    for (const float ZSign : {-1.f, 1.f})
+                    {
+                        Points.Add(BoxTransform.TransformPosition(FVector(XSign * HalfExtents.X, YSign * HalfExtents.Y, ZSign * HalfExtents.Z)));
+                    }
+                }
+            }
+        }
+        else if (BodySetup && BodySetup->AggGeom.SphereElems.Num() > 0)
+        {
+            const FKSphereElem& Sphere = BodySetup->AggGeom.SphereElems[0];
+            AppendCubePoints(Points, Sphere.Center, FVector(Sphere.Radius));
+        }
+
+        if (Points.Num() == 0)
+        {
+            AppendCubePoints(Points, FVector::ZeroVector, FVector(10.f));
+        }
+
+        PointsText.Reset();
+        for (const FVector& Point : Points)
+        {
+            PointsText += FString::Printf(TEXT("%.3f %.3f %.3f\n"), Point.X, Point.Y, Point.Z);
+        }
+        Status = FString::Printf(TEXT("Seeded %d point(s) for body '%s'."), Points.Num(), *BoneName.ToString());
+    }
+
+    static void AppendCubePoints(TArray<FVector>& OutPoints, const FVector& Center, const FVector& HalfExtents)
+    {
+        for (const float XSign : {-1.f, 1.f})
+        {
+            for (const float YSign : {-1.f, 1.f})
+            {
+                for (const float ZSign : {-1.f, 1.f})
+                {
+                    OutPoints.Add(Center + FVector(XSign * HalfExtents.X, YSign * HalfExtents.Y, ZSign * HalfExtents.Z));
+                }
+            }
+        }
+    }
+};
+
 class SVehiclePhATToolsPanel final : public SCompoundWidget
 {
 public:
@@ -553,7 +736,16 @@ private:
 
     FReply OnConvexCreate()
     {
-        Status = TEXT("MVP convex tool: backend can add FKConvexElem from point cloud; interactive vertex picker remains next pass.");
+        if (!PhysicsAsset)
+        {
+            Status = TEXT("No PhysicsAsset selected.");
+            return FReply::Handled();
+        }
+
+        VehiclePhATToolsUI::ShowModalWindow(
+            LOCTEXT("ConvexCreationWindowTitle", "Convex Creation Tool"),
+            SNew(SConvexCreationDialog).PhysicsAsset(PhysicsAsset).DefaultBone(Bone),
+            FVector2D(700.f, 540.f));
         return FReply::Handled();
     }
 
