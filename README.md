@@ -133,3 +133,7 @@ The requested final workflow is direct interaction in the native Physics Asset E
 ## Native convex tool state scaffold
 
 A shared `FVehiclePhATNativeConvexTool` state object now tracks create/edit mode, active PhysicsAsset/body, convex index, hover index, and editable convex points. This is the bridge point for the next implementation step: wiring native Physics Asset Editor viewport hit-testing to `AddPoint`, `MoveHoveredPoint`, `DeleteHoveredPoint`, and `Apply` so the PhAT viewport can drive the convex workflow directly.
+
+## Skeletal mesh vertex snapping scaffold
+
+`FVehiclePhATNativeConvexTool` can now snap candidate convex points to the nearest vertex in the preview Skeletal Mesh render data. The native PhAT viewport bridge should call `AddPointSnappedToMesh` / `MoveHoveredPointSnappedToMesh` after converting the viewport hit location into PhysicsAsset local space.

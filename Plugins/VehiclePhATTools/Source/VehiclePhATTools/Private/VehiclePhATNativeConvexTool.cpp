@@ -3,6 +3,8 @@
 #include "PhysicsEngine/PhysicsAsset.h"
 #include "PhysicsEngine/SkeletalBodySetup.h"
 #include "PhysicsEngine/AggregateGeom.h"
+#include "Engine/SkeletalMesh.h"
+#include "Rendering/SkeletalMeshRenderData.h"
 #include "VehiclePhATBodyUtils.h"
 #include "VehiclePhATConvexUtils.h"
 #include "VehiclePhATToolsLog.h"
@@ -98,6 +100,13 @@ void FVehiclePhATNativeConvexTool::AddPoint(const FVector& Point)
     VehiclePhATNativeConvexToolState::Points.Add(Point);
 }
 
+void FVehiclePhATNativeConvexTool::AddPointSnappedToMesh(const FVector& Point, float MaxSnapDistance)
+{
+    FVector SnappedPoint = Point;
+    SnapPointToNearestPreviewMeshVertex(Point, MaxSnapDistance, SnappedPoint);
+    VehiclePhATNativeConvexToolState::Points.Add(SnappedPoint);
+}
+
 bool FVehiclePhATNativeConvexTool::MoveHoveredPoint(const FVector& Point)
 {
     using namespace VehiclePhATNativeConvexToolState;
@@ -110,6 +119,13 @@ bool FVehiclePhATNativeConvexTool::MoveHoveredPoint(const FVector& Point)
     return true;
 }
 
+bool FVehiclePhATNativeConvexTool::MoveHoveredPointSnappedToMesh(const FVector& Point, float MaxSnapDistance)
+{
+    FVector SnappedPoint = Point;
+    SnapPointToNearestPreviewMeshVertex(Point, MaxSnapDistance, SnappedPoint);
+    return MoveHoveredPoint(SnappedPoint);
+}
+
 bool FVehiclePhATNativeConvexTool::DeleteHoveredPoint()
 {
     using namespace VehiclePhATNativeConvexToolState;
@@ -120,6 +136,54 @@ bool FVehiclePhATNativeConvexTool::DeleteHoveredPoint()
 
     Points.RemoveAt(HoverIndex);
     HoverIndex = INDEX_NONE;
+    return true;
+}
+
+bool FVehiclePhATNativeConvexTool::SnapPointToNearestPreviewMeshVertex(const FVector& Point, float MaxSnapDistance, FVector& OutSnappedPoint)
+{
+    const UPhysicsAsset* ActivePhysicsAsset = VehiclePhATNativeConvexToolState::PhysicsAsset.Get();
+    if (!ActivePhysicsAsset || !ActivePhysicsAsset->PreviewSkeletalMesh)
+    {
+        return false;
+    }
+
+    const USkeletalMesh* SkeletalMesh = ActivePhysicsAsset->PreviewSkeletalMesh;
+    const FSkeletalMeshRenderData* RenderData = SkeletalMesh->GetResourceForRendering();
+    if (!RenderData || RenderData->LODRenderData.Num() == 0)
+    {
+        return false;
+    }
+
+    const FSkeletalMeshLODRenderData& LODData = RenderData->LODRenderData[0];
+    const FPositionVertexBuffer& PositionVertexBuffer = LODData.StaticVertexBuffers.PositionVertexBuffer;
+    if (PositionVertexBuffer.GetNumVertices() == 0)
+    {
+        return false;
+    }
+
+    const float MaxDistanceSquared = MaxSnapDistance > 0.f ? FMath::Square(MaxSnapDistance) : TNumericLimits<float>::Max();
+    float BestDistanceSquared = MaxDistanceSquared;
+    bool bFound = false;
+    FVector BestPoint = Point;
+
+    for (uint32 VertexIndex = 0; VertexIndex < PositionVertexBuffer.GetNumVertices(); ++VertexIndex)
+    {
+        const FVector VertexPosition(PositionVertexBuffer.VertexPosition(VertexIndex));
+        const float DistanceSquared = FVector::DistSquared(Point, VertexPosition);
+        if (DistanceSquared <= BestDistanceSquared)
+        {
+            BestDistanceSquared = DistanceSquared;
+            BestPoint = VertexPosition;
+            bFound = true;
+        }
+    }
+
+    if (!bFound)
+    {
+        return false;
+    }
+
+    OutSnappedPoint = BestPoint;
     return true;
 }
 

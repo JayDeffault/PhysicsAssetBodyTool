@@ -29,8 +29,11 @@ public:
     static void SetHoverIndex(int32 Index);
     static int32 GetHoverIndex();
     static void AddPoint(const FVector& Point);
+    static void AddPointSnappedToMesh(const FVector& Point, float MaxSnapDistance);
     static bool MoveHoveredPoint(const FVector& Point);
+    static bool MoveHoveredPointSnappedToMesh(const FVector& Point, float MaxSnapDistance);
     static bool DeleteHoveredPoint();
+    static bool SnapPointToNearestPreviewMeshVertex(const FVector& Point, float MaxSnapDistance, FVector& OutSnappedPoint);
     static bool Apply(FString& OutMessage);
 
 private:
