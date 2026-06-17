@@ -57,8 +57,6 @@ void FVehiclePhATNativeConvexTool::StartEdit(UPhysicsAsset* PhysicsAsset, FName 
 void FVehiclePhATNativeConvexTool::Stop()
 {
     using namespace VehiclePhATNativeConvexToolState;
-    FString UnusedMessage;
-    RemoveViewportVertexMarkers(UnusedMessage);
     Mode = EMode::Inactive;
     PhysicsAsset.Reset();
     BodyBone = NAME_None;

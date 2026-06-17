@@ -404,6 +404,8 @@ public:
                 [SNew(SButton).Text(LOCTEXT("PreviewConvex", "Preview Points")).OnClicked(this, &SConvexCreationDialog::OnPreview)]
                 + SUniformGridPanel::Slot(2, 0)
                 [SNew(SButton).Text(LOCTEXT("ApplyConvex", "Apply Convex")).OnClicked(this, &SConvexCreationDialog::OnApply)]
+                + SUniformGridPanel::Slot(3, 0)
+                [SNew(SButton).Text(LOCTEXT("ClearCreateConvexMarkers", "Clear Viewport Markers")).OnClicked(this, &SConvexCreationDialog::OnClearMarkers)]
             ]
         ];
     }
@@ -455,9 +457,7 @@ private:
         {
             FString ApplyMessage;
             FVehiclePhATNativeConvexTool::Apply(ApplyMessage);
-            FString RemoveMessage;
-            FVehiclePhATNativeConvexTool::RemoveViewportVertexMarkers(RemoveMessage);
-            Status = ApplyMessage + TEXT("\n") + RemoveMessage;
+            Status = ApplyMessage + TEXT("\nViewport marker spheres were kept after Apply to avoid invalidating the currently selected PhAT primitive. Select a non-marker primitive, then use Clear Viewport Markers.");
             return FReply::Handled();
         }
 
@@ -471,6 +471,14 @@ private:
         {
             Status = FString::Printf(TEXT("Body '%s' was not found."), *BoneName.ToString());
         }
+        return FReply::Handled();
+    }
+
+    FReply OnClearMarkers()
+    {
+        FString Message;
+        FVehiclePhATNativeConvexTool::RemoveViewportVertexMarkers(Message);
+        Status = Message;
         return FReply::Handled();
     }
 
@@ -622,6 +630,8 @@ public:
                 [SNew(SButton).Text(LOCTEXT("PreviewEditedConvex", "Preview Points")).OnClicked(this, &SConvexEditDialog::OnPreview)]
                 + SUniformGridPanel::Slot(2, 0)
                 [SNew(SButton).Text(LOCTEXT("ReplaceConvex", "Rebuild / Replace")).OnClicked(this, &SConvexEditDialog::OnReplace)]
+                + SUniformGridPanel::Slot(3, 0)
+                [SNew(SButton).Text(LOCTEXT("ClearConvexMarkers", "Clear Viewport Markers")).OnClicked(this, &SConvexEditDialog::OnClearMarkers)]
             ]
         ];
     }
@@ -684,8 +694,14 @@ private:
         }
 
         FVehiclePhATConvexUtils::ReplaceConvexFromPoints(PhysicsAsset, BodySetup, ConvexIndex, Points, Message);
-        FString RemoveMessage;
-        FVehiclePhATNativeConvexTool::RemoveViewportVertexMarkers(RemoveMessage);
+        Status = Message + TEXT("\nViewport marker spheres were kept after Rebuild to avoid invalidating the currently selected PhAT primitive. Select a non-marker primitive, then use Clear Viewport Markers.");
+        return FReply::Handled();
+    }
+
+    FReply OnClearMarkers()
+    {
+        FString Message;
+        FVehiclePhATNativeConvexTool::RemoveViewportVertexMarkers(Message);
         Status = Message;
         return FReply::Handled();
     }

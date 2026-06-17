@@ -128,7 +128,7 @@ A shared `FVehiclePhATNativeConvexTool` state object now tracks create/edit mode
 
 ## Native PhAT visible vertex markers
 
-Until the Physics Asset Editor viewport client is directly extended, the Create/Edit Convex tools now create small temporary sphere markers at the convex point positions inside the selected body. These marker spheres are visible in the normal PhAT viewport with the Skeletal Mesh and physics bodies, can be selected/moved with PhAT's existing transform gizmo, and are pulled back into the convex point cloud on Apply before the temporary markers are removed.
+Until the Physics Asset Editor viewport client is directly extended, the Create/Edit Convex tools now create small temporary sphere markers at the convex point positions inside the selected body. These marker spheres are visible in the normal PhAT viewport with the Skeletal Mesh and physics bodies, can be selected/moved with PhAT's existing transform gizmo, and are pulled back into the convex point cloud on Apply. The markers are intentionally kept after Apply/Rebuild so PhAT does not keep a dangling selection to a just-deleted primitive; select a non-marker primitive first, then click **Clear Viewport Markers**.
 
 ## Skeletal mesh vertex snapping scaffold
 
