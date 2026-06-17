@@ -5,6 +5,7 @@
 #include "PhysicsEngine/AggregateGeom.h"
 #include "Engine/SkeletalMesh.h"
 #include "Rendering/SkeletalMeshRenderData.h"
+#include "ScopedTransaction.h"
 #include "VehiclePhATBodyUtils.h"
 #include "VehiclePhATConvexUtils.h"
 #include "VehiclePhATToolsLog.h"
@@ -17,6 +18,8 @@ FName BodyBone = NAME_None;
 int32 ConvexIndex = INDEX_NONE;
 int32 HoverIndex = INDEX_NONE;
 int32 SelectedIndex = INDEX_NONE;
+int32 MarkerStartIndex = INDEX_NONE;
+int32 MarkerCount = 0;
 TArray<FVector> Points;
 }
 
@@ -29,6 +32,8 @@ void FVehiclePhATNativeConvexTool::StartCreate(UPhysicsAsset* PhysicsAsset, FNam
     ConvexIndex = INDEX_NONE;
     HoverIndex = INDEX_NONE;
     SelectedIndex = INDEX_NONE;
+    MarkerStartIndex = INDEX_NONE;
+    MarkerCount = 0;
     Points.Reset();
     UE_LOG(LogVehiclePhATTools, Log, TEXT("Native convex create mode started for body '%s'."), *BodyBone.ToString());
 }
@@ -42,6 +47,8 @@ void FVehiclePhATNativeConvexTool::StartEdit(UPhysicsAsset* PhysicsAsset, FName 
     ConvexIndex = InConvexIndex;
     HoverIndex = INDEX_NONE;
     SelectedIndex = INDEX_NONE;
+    MarkerStartIndex = INDEX_NONE;
+    MarkerCount = 0;
     Points.Reset();
     LoadExistingConvex();
     UE_LOG(LogVehiclePhATTools, Log, TEXT("Native convex edit mode started for body '%s' convex %d."), *BodyBone.ToString(), InConvexIndex);
@@ -50,12 +57,16 @@ void FVehiclePhATNativeConvexTool::StartEdit(UPhysicsAsset* PhysicsAsset, FName 
 void FVehiclePhATNativeConvexTool::Stop()
 {
     using namespace VehiclePhATNativeConvexToolState;
+    FString UnusedMessage;
+    RemoveViewportVertexMarkers(UnusedMessage);
     Mode = EMode::Inactive;
     PhysicsAsset.Reset();
     BodyBone = NAME_None;
     ConvexIndex = INDEX_NONE;
     HoverIndex = INDEX_NONE;
     SelectedIndex = INDEX_NONE;
+    MarkerStartIndex = INDEX_NONE;
+    MarkerCount = 0;
     Points.Reset();
 }
 
@@ -87,6 +98,14 @@ int32 FVehiclePhATNativeConvexTool::GetConvexIndex()
 const TArray<FVector>& FVehiclePhATNativeConvexTool::GetPoints()
 {
     return VehiclePhATNativeConvexToolState::Points;
+}
+
+void FVehiclePhATNativeConvexTool::SetPoints(const TArray<FVector>& InPoints)
+{
+    using namespace VehiclePhATNativeConvexToolState;
+    Points = InPoints;
+    HoverIndex = INDEX_NONE;
+    SelectedIndex = Points.Num() > 0 ? 0 : INDEX_NONE;
 }
 
 void FVehiclePhATNativeConvexTool::SetHoverIndex(int32 Index)
@@ -202,6 +221,105 @@ bool FVehiclePhATNativeConvexTool::ApplySelectedPointDelta(const FVector& Delta,
     }
 
     return MoveSelectedPoint(Points[SelectedIndex] + Delta, bSnapToMesh, MaxSnapDistance);
+}
+
+bool FVehiclePhATNativeConvexTool::RebuildViewportVertexMarkers(float MarkerRadius, FString& OutMessage)
+{
+    using namespace VehiclePhATNativeConvexToolState;
+    if (!IsActive())
+    {
+        OutMessage = TEXT("Native convex tool is inactive.");
+        return false;
+    }
+
+    USkeletalBodySetup* BodySetup = GetBodySetup();
+    UPhysicsAsset* ActivePhysicsAsset = PhysicsAsset.Get();
+    if (!ActivePhysicsAsset || !BodySetup)
+    {
+        OutMessage = TEXT("Cannot build convex vertex markers without a valid PhysicsAsset and body.");
+        return false;
+    }
+
+    FScopedTransaction Transaction(NSLOCTEXT("VehiclePhATTools", "RebuildConvexVertexMarkers", "Rebuild Vehicle Convex Vertex Markers"));
+    ActivePhysicsAsset->Modify();
+    BodySetup->Modify();
+
+    if (MarkerStartIndex != INDEX_NONE && MarkerCount > 0 && BodySetup->AggGeom.SphereElems.IsValidIndex(MarkerStartIndex))
+    {
+        const int32 SafeMarkerCount = FMath::Min(MarkerCount, BodySetup->AggGeom.SphereElems.Num() - MarkerStartIndex);
+        BodySetup->AggGeom.SphereElems.RemoveAt(MarkerStartIndex, SafeMarkerCount);
+    }
+
+    MarkerStartIndex = BodySetup->AggGeom.SphereElems.Num();
+    MarkerCount = Points.Num();
+    const float SafeRadius = FMath::Max(0.25f, MarkerRadius);
+
+    for (const FVector& Point : Points)
+    {
+        FKSphereElem& Marker = BodySetup->AggGeom.SphereElems.AddDefaulted_GetRef();
+        Marker.Center = Point;
+        Marker.Radius = SafeRadius;
+    }
+
+    FVehiclePhATBodyUtils::MarkAssetChanged(ActivePhysicsAsset);
+    OutMessage = FString::Printf(TEXT("Created %d native PhAT viewport vertex marker sphere(s). Move these markers with the standard PhAT transform gizmo, then Apply Convex."), MarkerCount);
+    return true;
+}
+
+bool FVehiclePhATNativeConvexTool::PullPointsFromViewportVertexMarkers(FString& OutMessage)
+{
+    using namespace VehiclePhATNativeConvexToolState;
+    const USkeletalBodySetup* BodySetup = GetBodySetup();
+    if (!BodySetup || MarkerStartIndex == INDEX_NONE || MarkerCount <= 0 || !BodySetup->AggGeom.SphereElems.IsValidIndex(MarkerStartIndex))
+    {
+        OutMessage = TEXT("No active native PhAT viewport vertex markers were found.");
+        return false;
+    }
+
+    const int32 SafeMarkerCount = FMath::Min(MarkerCount, BodySetup->AggGeom.SphereElems.Num() - MarkerStartIndex);
+    Points.Reset();
+    Points.Reserve(SafeMarkerCount);
+    for (int32 MarkerOffset = 0; MarkerOffset < SafeMarkerCount; ++MarkerOffset)
+    {
+        Points.Add(BodySetup->AggGeom.SphereElems[MarkerStartIndex + MarkerOffset].Center);
+    }
+
+    HoverIndex = INDEX_NONE;
+    SelectedIndex = Points.Num() > 0 ? 0 : INDEX_NONE;
+    OutMessage = FString::Printf(TEXT("Pulled %d convex point(s) from native PhAT viewport marker spheres."), Points.Num());
+    return Points.Num() > 0;
+}
+
+bool FVehiclePhATNativeConvexTool::RemoveViewportVertexMarkers(FString& OutMessage)
+{
+    using namespace VehiclePhATNativeConvexToolState;
+    USkeletalBodySetup* BodySetup = GetBodySetup();
+    UPhysicsAsset* ActivePhysicsAsset = PhysicsAsset.Get();
+    if (!ActivePhysicsAsset || !BodySetup || MarkerStartIndex == INDEX_NONE || MarkerCount <= 0)
+    {
+        OutMessage = TEXT("No native PhAT viewport vertex markers to remove.");
+        return false;
+    }
+
+    if (!BodySetup->AggGeom.SphereElems.IsValidIndex(MarkerStartIndex))
+    {
+        MarkerStartIndex = INDEX_NONE;
+        MarkerCount = 0;
+        OutMessage = TEXT("Native PhAT viewport vertex marker indices were already invalid.");
+        return false;
+    }
+
+    FScopedTransaction Transaction(NSLOCTEXT("VehiclePhATTools", "RemoveConvexVertexMarkers", "Remove Vehicle Convex Vertex Markers"));
+    ActivePhysicsAsset->Modify();
+    BodySetup->Modify();
+
+    const int32 SafeMarkerCount = FMath::Min(MarkerCount, BodySetup->AggGeom.SphereElems.Num() - MarkerStartIndex);
+    BodySetup->AggGeom.SphereElems.RemoveAt(MarkerStartIndex, SafeMarkerCount);
+    MarkerStartIndex = INDEX_NONE;
+    MarkerCount = 0;
+    FVehiclePhATBodyUtils::MarkAssetChanged(ActivePhysicsAsset);
+    OutMessage = FString::Printf(TEXT("Removed %d native PhAT viewport vertex marker sphere(s)."), SafeMarkerCount);
+    return true;
 }
 
 void FVehiclePhATNativeConvexTool::AddPoint(const FVector& Point)

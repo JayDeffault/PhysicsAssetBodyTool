@@ -443,12 +443,24 @@ private:
     {
         const TArray<FVector> Points = ParsePointsFromText();
         Status = FString::Printf(TEXT("Preview: %d point(s). At least 4 non-coplanar points are required."), Points.Num());
+        RebuildNativeViewportMarkers(Points);
         return FReply::Handled();
     }
 
     FReply OnApply()
     {
         const TArray<FVector> Points = ParsePointsFromText();
+        FString NativeMessage;
+        if (FVehiclePhATNativeConvexTool::PullPointsFromViewportVertexMarkers(NativeMessage))
+        {
+            FString ApplyMessage;
+            FVehiclePhATNativeConvexTool::Apply(ApplyMessage);
+            FString RemoveMessage;
+            FVehiclePhATNativeConvexTool::RemoveViewportVertexMarkers(RemoveMessage);
+            Status = ApplyMessage + TEXT("\n") + RemoveMessage;
+            return FReply::Handled();
+        }
+
         if (USkeletalBodySetup* BodySetup = FVehiclePhATBodyUtils::FindBodySetup(PhysicsAsset, BoneName))
         {
             FString Message;
@@ -522,6 +534,25 @@ private:
             PointsText += FString::Printf(TEXT("%.3f %.3f %.3f\n"), Point.X, Point.Y, Point.Z);
         }
         Status = FString::Printf(TEXT("Seeded %d point(s) for body '%s'."), Points.Num(), *BoneName.ToString());
+        RebuildNativeViewportMarkers(Points);
+    }
+
+    void RebuildNativeViewportMarkersFromText()
+    {
+        RebuildNativeViewportMarkers(ParsePointsFromText());
+    }
+
+    void RebuildNativeViewportMarkers(const TArray<FVector>& Points)
+    {
+        if (!FVehiclePhATNativeConvexTool::IsActive())
+        {
+            return;
+        }
+
+        FVehiclePhATNativeConvexTool::SetPoints(Points);
+        FString MarkerMessage;
+        FVehiclePhATNativeConvexTool::RebuildViewportVertexMarkers(2.5f, MarkerMessage);
+        Status += TEXT("\n") + MarkerMessage;
     }
 
     static void AppendCubePoints(TArray<FVector>& OutPoints, const FVector& Center, const FVector& HalfExtents)
@@ -632,6 +663,7 @@ private:
     {
         const TArray<FVector> Points = ParsePointsFromText();
         Status = FString::Printf(TEXT("Preview edited convex %d on '%s': %d point(s)."), ConvexIndex, *BoneName.ToString(), Points.Num());
+        RebuildNativeViewportMarkers(Points);
         return FReply::Handled();
     }
 
@@ -644,9 +676,16 @@ private:
             return FReply::Handled();
         }
 
-        const TArray<FVector> Points = ParsePointsFromText();
+        TArray<FVector> Points = ParsePointsFromText();
         FString Message;
+        if (FVehiclePhATNativeConvexTool::PullPointsFromViewportVertexMarkers(Message))
+        {
+            Points = FVehiclePhATNativeConvexTool::GetPoints();
+        }
+
         FVehiclePhATConvexUtils::ReplaceConvexFromPoints(PhysicsAsset, BodySetup, ConvexIndex, Points, Message);
+        FString RemoveMessage;
+        FVehiclePhATNativeConvexTool::RemoveViewportVertexMarkers(RemoveMessage);
         Status = Message;
         return FReply::Handled();
     }
@@ -673,6 +712,7 @@ private:
             PointsText += FString::Printf(TEXT("%.3f %.3f %.3f\n"), Vertex.X, Vertex.Y, Vertex.Z);
         }
         Status = FString::Printf(TEXT("Loaded convex %d from '%s' with %d vertices."), ConvexIndex, *BoneName.ToString(), Convex.VertexData.Num());
+        RebuildNativeViewportMarkersFromText();
     }
 
     void SyncTextBox()
@@ -702,6 +742,24 @@ private:
             Points.Add(FVector(FCString::Atof(*Tokens[0]), FCString::Atof(*Tokens[1]), FCString::Atof(*Tokens[2])));
         }
         return Points;
+    }
+
+    void RebuildNativeViewportMarkersFromText()
+    {
+        RebuildNativeViewportMarkers(ParsePointsFromText());
+    }
+
+    void RebuildNativeViewportMarkers(const TArray<FVector>& Points)
+    {
+        if (!FVehiclePhATNativeConvexTool::IsActive())
+        {
+            return;
+        }
+
+        FVehiclePhATNativeConvexTool::SetPoints(Points);
+        FString MarkerMessage;
+        FVehiclePhATNativeConvexTool::RebuildViewportVertexMarkers(2.5f, MarkerMessage);
+        Status += TEXT("\n") + MarkerMessage;
     }
 
 };

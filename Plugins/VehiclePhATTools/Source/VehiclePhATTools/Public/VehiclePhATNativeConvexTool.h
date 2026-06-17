@@ -48,6 +48,7 @@ public:
     static FName GetBodyBone();
     static int32 GetConvexIndex();
     static const TArray<FVector>& GetPoints();
+    static void SetPoints(const TArray<FVector>& InPoints);
 
     static void SetHoverIndex(int32 Index);
     static int32 GetHoverIndex();
@@ -63,6 +64,9 @@ public:
     static bool GetSelectedPointTransform(FTransform& OutTransform);
     static bool MoveSelectedPoint(const FVector& NewPosition, bool bSnapToMesh, float MaxSnapDistance);
     static bool ApplySelectedPointDelta(const FVector& Delta, bool bSnapToMesh, float MaxSnapDistance);
+    static bool RebuildViewportVertexMarkers(float MarkerRadius, FString& OutMessage);
+    static bool PullPointsFromViewportVertexMarkers(FString& OutMessage);
+    static bool RemoveViewportVertexMarkers(FString& OutMessage);
     static void AddPoint(const FVector& Point);
     static void AddPointSnappedToMesh(const FVector& Point, float MaxSnapDistance);
     static bool MoveHoveredPoint(const FVector& Point);

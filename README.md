@@ -126,6 +126,10 @@ A shared `FVehiclePhATNativeConvexTool` state object now tracks create/edit mode
 
 `FVehiclePhATNativeConvexTool` now tracks a selected convex vertex separately from the hovered vertex. The native PhAT viewport client can call `SelectNearestPointToRay` or `SelectHoveredPoint` on click, return `GetSelectedPointTransform` as the widget location, and call `ApplySelectedPointDelta` from the viewport transform-gizmo delta handler. This keeps vertex movement in the standard PhAT viewport instead of opening a separate viewport.
 
+## Native PhAT visible vertex markers
+
+Until the Physics Asset Editor viewport client is directly extended, the Create/Edit Convex tools now create small temporary sphere markers at the convex point positions inside the selected body. These marker spheres are visible in the normal PhAT viewport with the Skeletal Mesh and physics bodies, can be selected/moved with PhAT's existing transform gizmo, and are pulled back into the convex point cloud on Apply before the temporary markers are removed.
+
 ## Skeletal mesh vertex snapping scaffold
 
 `FVehiclePhATNativeConvexTool` can now snap candidate convex points to the nearest vertex in the preview Skeletal Mesh render data. The native PhAT viewport bridge should call `AddPointSnappedToMesh` / `MoveHoveredPointSnappedToMesh` after converting the viewport hit location into PhysicsAsset local space.
