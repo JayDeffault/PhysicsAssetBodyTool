@@ -455,6 +455,8 @@ private:
         FString NativeMessage;
         if (FVehiclePhATNativeConvexTool::PullPointsFromViewportVertexMarkers(NativeMessage))
         {
+            SetPointsTextFromPoints(FVehiclePhATNativeConvexTool::GetPoints());
+            SyncTextBox();
             FString ApplyMessage;
             FVehiclePhATNativeConvexTool::Apply(ApplyMessage);
             Status = ApplyMessage + TEXT("\nViewport marker spheres were kept after Apply to avoid invalidating the currently selected PhAT primitive. Select a non-marker primitive, then use Clear Viewport Markers.");
@@ -537,12 +539,26 @@ private:
         }
 
         PointsText.Reset();
+        SetPointsTextFromPoints(Points);
+        Status = FString::Printf(TEXT("Seeded %d point(s) for body '%s'."), Points.Num(), *BoneName.ToString());
+        RebuildNativeViewportMarkers(Points);
+    }
+
+    void SetPointsTextFromPoints(const TArray<FVector>& Points)
+    {
+        PointsText.Reset();
         for (const FVector& Point : Points)
         {
             PointsText += FString::Printf(TEXT("%.3f %.3f %.3f\n"), Point.X, Point.Y, Point.Z);
         }
-        Status = FString::Printf(TEXT("Seeded %d point(s) for body '%s'."), Points.Num(), *BoneName.ToString());
-        RebuildNativeViewportMarkers(Points);
+    }
+
+    void SyncTextBox()
+    {
+        if (PointsTextBox.IsValid())
+        {
+            PointsTextBox->SetText(FText::FromString(PointsText));
+        }
     }
 
     void RebuildNativeViewportMarkersFromText()
@@ -691,6 +707,8 @@ private:
         if (FVehiclePhATNativeConvexTool::PullPointsFromViewportVertexMarkers(Message))
         {
             Points = FVehiclePhATNativeConvexTool::GetPoints();
+            SetPointsTextFromPoints(Points);
+            SyncTextBox();
         }
 
         FVehiclePhATConvexUtils::ReplaceConvexFromPoints(PhysicsAsset, BodySetup, ConvexIndex, Points, Message);
@@ -723,10 +741,7 @@ private:
         }
 
         const FKConvexElem& Convex = BodySetup->AggGeom.ConvexElems[ConvexIndex];
-        for (const FVector& Vertex : Convex.VertexData)
-        {
-            PointsText += FString::Printf(TEXT("%.3f %.3f %.3f\n"), Vertex.X, Vertex.Y, Vertex.Z);
-        }
+        SetPointsTextFromPoints(Convex.VertexData);
         Status = FString::Printf(TEXT("Loaded convex %d from '%s' with %d vertices."), ConvexIndex, *BoneName.ToString(), Convex.VertexData.Num());
         RebuildNativeViewportMarkersFromText();
     }
@@ -758,6 +773,15 @@ private:
             Points.Add(FVector(FCString::Atof(*Tokens[0]), FCString::Atof(*Tokens[1]), FCString::Atof(*Tokens[2])));
         }
         return Points;
+    }
+
+    void SetPointsTextFromPoints(const TArray<FVector>& Points)
+    {
+        PointsText.Reset();
+        for (const FVector& Point : Points)
+        {
+            PointsText += FString::Printf(TEXT("%.3f %.3f %.3f\n"), Point.X, Point.Y, Point.Z);
+        }
     }
 
     void RebuildNativeViewportMarkersFromText()
