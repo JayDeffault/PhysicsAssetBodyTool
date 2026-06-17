@@ -370,6 +370,7 @@ public:
         PhysicsAsset = InArgs._PhysicsAsset;
         BoneName = InArgs._DefaultBone;
         SeedPointsFromCurrentBody();
+        RegisterActiveTimer(0.25f, FWidgetActiveTimerDelegate::CreateSP(this, &SConvexCreationDialog::OnLiveUpdateTimer));
 
         ChildSlot
         [
@@ -415,11 +416,27 @@ private:
     FName BoneName;
     FString PointsText;
     FString Status;
+    bool bLiveUpdateConvex = true;
     TSharedPtr<SMultiLineEditableTextBox> PointsTextBox;
 
     FText GetBoneText() const { return FText::FromName(BoneName); }
     FText GetPointsText() const { return FText::FromString(PointsText); }
     FText GetStatusText() const { return FText::FromString(Status); }
+
+    EActiveTimerReturnType OnLiveUpdateTimer(double, float)
+    {
+        if (bLiveUpdateConvex && FVehiclePhATNativeConvexTool::IsActive())
+        {
+            FString Message;
+            if (FVehiclePhATNativeConvexTool::LiveUpdateConvexFromViewportVertexMarkers(Message))
+            {
+                SetPointsTextFromPoints(FVehiclePhATNativeConvexTool::GetPoints());
+                SyncTextBox();
+                Status = Message;
+            }
+        }
+        return EActiveTimerReturnType::Continue;
+    }
 
     void OnBoneCommitted(const FText& Text, ETextCommit::Type)
     {
@@ -608,6 +625,7 @@ public:
         PhysicsAsset = InArgs._PhysicsAsset;
         BoneName = InArgs._DefaultBone;
         LoadCurrentConvex();
+        RegisterActiveTimer(0.25f, FWidgetActiveTimerDelegate::CreateSP(this, &SConvexEditDialog::OnLiveUpdateTimer));
 
         ChildSlot
         [
@@ -658,12 +676,29 @@ private:
     int32 ConvexIndex = 0;
     FString PointsText;
     FString Status;
+    bool bLiveUpdateConvex = true;
     TSharedPtr<SMultiLineEditableTextBox> PointsTextBox;
 
     FText GetBoneText() const { return FText::FromName(BoneName); }
     TOptional<int32> GetConvexIndex() const { return ConvexIndex; }
     FText GetPointsText() const { return FText::FromString(PointsText); }
     FText GetStatusText() const { return FText::FromString(Status); }
+
+    EActiveTimerReturnType OnLiveUpdateTimer(double, float)
+    {
+        if (bLiveUpdateConvex && FVehiclePhATNativeConvexTool::IsActive())
+        {
+            FString Message;
+            if (FVehiclePhATNativeConvexTool::LiveUpdateConvexFromViewportVertexMarkers(Message))
+            {
+                ConvexIndex = FMath::Max(0, FVehiclePhATNativeConvexTool::GetConvexIndex());
+                SetPointsTextFromPoints(FVehiclePhATNativeConvexTool::GetPoints());
+                SyncTextBox();
+                Status = Message;
+            }
+        }
+        return EActiveTimerReturnType::Continue;
+    }
 
     void OnBoneCommitted(const FText& Text, ETextCommit::Type)
     {

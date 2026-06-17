@@ -67,6 +67,7 @@ public:
     static bool RebuildViewportVertexMarkers(float MarkerRadius, FString& OutMessage);
     static bool PullPointsFromViewportVertexMarkers(FString& OutMessage);
     static bool RemoveViewportVertexMarkers(FString& OutMessage);
+    static bool LiveUpdateConvexFromViewportVertexMarkers(FString& OutMessage);
     static void AddPoint(const FVector& Point);
     static void AddPointSnappedToMesh(const FVector& Point, float MaxSnapDistance);
     static bool MoveHoveredPoint(const FVector& Point);

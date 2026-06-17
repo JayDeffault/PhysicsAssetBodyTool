@@ -22,6 +22,7 @@ int32 MarkerStartIndex = INDEX_NONE;
 int32 MarkerCount = 0;
 int32 MarkerAllocatedCount = 0;
 TArray<FVector> Points;
+TArray<FVector> LastLiveUpdatePoints;
 }
 
 void FVehiclePhATNativeConvexTool::StartCreate(UPhysicsAsset* PhysicsAsset, FName BodyBone)
@@ -37,6 +38,7 @@ void FVehiclePhATNativeConvexTool::StartCreate(UPhysicsAsset* PhysicsAsset, FNam
     MarkerCount = 0;
     MarkerAllocatedCount = 0;
     Points.Reset();
+    LastLiveUpdatePoints.Reset();
     UE_LOG(LogVehiclePhATTools, Log, TEXT("Native convex create mode started for body '%s'."), *BodyBone.ToString());
 }
 
@@ -53,6 +55,7 @@ void FVehiclePhATNativeConvexTool::StartEdit(UPhysicsAsset* PhysicsAsset, FName 
     MarkerCount = 0;
     MarkerAllocatedCount = 0;
     Points.Reset();
+    LastLiveUpdatePoints.Reset();
     LoadExistingConvex();
     UE_LOG(LogVehiclePhATTools, Log, TEXT("Native convex edit mode started for body '%s' convex %d."), *BodyBone.ToString(), InConvexIndex);
 }
@@ -70,6 +73,7 @@ void FVehiclePhATNativeConvexTool::Stop()
     MarkerCount = 0;
     MarkerAllocatedCount = 0;
     Points.Reset();
+    LastLiveUpdatePoints.Reset();
 }
 
 bool FVehiclePhATNativeConvexTool::IsActive()
@@ -282,6 +286,7 @@ bool FVehiclePhATNativeConvexTool::RebuildViewportVertexMarkers(float MarkerRadi
     }
 
     MarkerCount = Points.Num();
+    LastLiveUpdatePoints = Points;
     FVehiclePhATBodyUtils::MarkAssetChanged(ActivePhysicsAsset);
     OutMessage = FString::Printf(TEXT("Created %d native PhAT viewport vertex marker sphere(s). Move these markers with the standard PhAT transform gizmo, then Apply Convex."), MarkerCount);
     return true;
@@ -344,6 +349,76 @@ bool FVehiclePhATNativeConvexTool::RemoveViewportVertexMarkers(FString& OutMessa
     MarkerCount = 0;
     FVehiclePhATBodyUtils::MarkAssetChanged(ActivePhysicsAsset);
     OutMessage = FString::Printf(TEXT("Cleared %d native PhAT viewport vertex marker sphere(s) without deleting selected PhAT primitives."), SafeMarkerCount);
+    return true;
+}
+
+bool FVehiclePhATNativeConvexTool::LiveUpdateConvexFromViewportVertexMarkers(FString& OutMessage)
+{
+    using namespace VehiclePhATNativeConvexToolState;
+    if (!IsActive())
+    {
+        OutMessage = TEXT("Native convex tool is inactive.");
+        return false;
+    }
+
+    FString PullMessage;
+    if (!PullPointsFromViewportVertexMarkers(PullMessage))
+    {
+        OutMessage = PullMessage;
+        return false;
+    }
+
+    if (Points.Num() < 4)
+    {
+        OutMessage = TEXT("Live update needs at least four marker points.");
+        return false;
+    }
+
+    bool bPointsChanged = Points.Num() != LastLiveUpdatePoints.Num();
+    if (!bPointsChanged)
+    {
+        for (int32 PointIndex = 0; PointIndex < Points.Num(); ++PointIndex)
+        {
+            if (!Points[PointIndex].Equals(LastLiveUpdatePoints[PointIndex], 0.01f))
+            {
+                bPointsChanged = true;
+                break;
+            }
+        }
+    }
+
+    if (!bPointsChanged)
+    {
+        OutMessage = TEXT("Live update skipped; marker points have not changed.");
+        return false;
+    }
+
+    USkeletalBodySetup* BodySetup = GetBodySetup();
+    UPhysicsAsset* ActivePhysicsAsset = PhysicsAsset.Get();
+    if (!ActivePhysicsAsset || !BodySetup)
+    {
+        OutMessage = TEXT("Live update has no valid PhysicsAsset/body.");
+        return false;
+    }
+
+    if (Mode == EMode::Create || !BodySetup->AggGeom.ConvexElems.IsValidIndex(ConvexIndex))
+    {
+        FKConvexElem& NewConvex = BodySetup->AggGeom.ConvexElems.AddDefaulted_GetRef();
+        NewConvex.VertexData = Points;
+        NewConvex.UpdateElemBox();
+        ConvexIndex = BodySetup->AggGeom.ConvexElems.Num() - 1;
+        Mode = EMode::Edit;
+    }
+    else
+    {
+        FKConvexElem& Convex = BodySetup->AggGeom.ConvexElems[ConvexIndex];
+        Convex.VertexData = Points;
+        Convex.UpdateElemBox();
+    }
+
+    LastLiveUpdatePoints = Points;
+    FVehiclePhATBodyUtils::MarkBodySetupGeometryChanged(ActivePhysicsAsset, BodySetup);
+    OutMessage = FString::Printf(TEXT("Live-updated convex %d from %d viewport marker point(s)."), ConvexIndex, Points.Num());
     return true;
 }
 

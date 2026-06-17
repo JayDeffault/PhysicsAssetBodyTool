@@ -130,6 +130,8 @@ A shared `FVehiclePhATNativeConvexTool` state object now tracks create/edit mode
 
 Until the Physics Asset Editor viewport client is directly extended, the Create/Edit Convex tools now create small temporary sphere markers at the convex point positions inside the selected body. These marker spheres are visible in the normal PhAT viewport with the Skeletal Mesh and physics bodies, can be selected/moved with PhAT's existing transform gizmo, and are pulled back into the convex point cloud on Apply. The markers are intentionally kept after Apply/Rebuild so PhAT does not keep a dangling selection to a just-deleted primitive; **Clear Viewport Markers** safely shrinks marker spheres instead of removing array elements, which avoids PhAT selection index assertions.
 
+The convex dialogs also poll the marker spheres while open and live-update the target `FKConvexElem` whenever marker positions change. In create mode the first marker movement creates a live convex element, then later marker movements update that same element instead of adding duplicates.
+
 ## Skeletal mesh vertex snapping scaffold
 
 `FVehiclePhATNativeConvexTool` can now snap candidate convex points to the nearest vertex in the preview Skeletal Mesh render data. The native PhAT viewport bridge should call `AddPointSnappedToMesh` / `MoveHoveredPointSnappedToMesh` after converting the viewport hit location into PhysicsAsset local space.
