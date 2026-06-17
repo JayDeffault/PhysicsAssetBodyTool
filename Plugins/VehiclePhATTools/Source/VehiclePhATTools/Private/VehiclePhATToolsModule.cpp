@@ -1,13 +1,11 @@
 #include "VehiclePhATToolsModule.h"
 
 #include "Framework/Application/SlateApplication.h"
-#include "InputCoreTypes.h"
 #include "PhysicsEngine/AggregateGeom.h"
 #include "PhysicsEngine/PhysicsAsset.h"
 #include "PhysicsEngine/SkeletalBodySetup.h"
 #include "ScopedTransaction.h"
 #include "ToolMenus.h"
-#include "Styling/CoreStyle.h"
 #include "VehiclePhATBodyUtils.h"
 #include "VehiclePhATClipboard.h"
 #include "VehiclePhATConstraintUtils.h"
@@ -23,14 +21,11 @@
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Input/SMultiLineEditableTextBox.h"
 #include "Widgets/Input/SNumericEntryBox.h"
-#include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScrollBox.h"
-#include "Widgets/Layout/SBorder.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Layout/SUniformGridPanel.h"
 #include "Widgets/SWindow.h"
 #include "Widgets/Text/STextBlock.h"
-#include "Rendering/DrawElements.h"
 
 #define LOCTEXT_NAMESPACE "VehiclePhATTools"
 
@@ -362,221 +357,6 @@ private:
     }
 };
 
-class SConvexPointViewport final : public SCompoundWidget
-{
-public:
-    SLATE_BEGIN_ARGS(SConvexPointViewport) {}
-        SLATE_ARGUMENT(TArray<FVector>*, Points)
-        SLATE_EVENT(FSimpleDelegate, OnPointsChanged)
-    SLATE_END_ARGS()
-
-    void Construct(const FArguments& InArgs)
-    {
-        Points = InArgs._Points;
-        OnPointsChanged = InArgs._OnPointsChanged;
-        ChildSlot
-        [
-            SNew(SBorder)
-            .Padding(4)
-            [
-                SNew(STextBlock)
-                .Text(LOCTEXT("ConvexViewportHint", "3D point viewport: hover highlights a vertex yellow. LMB creates or drags the highlighted vertex. RMB deletes the highlighted vertex. Text can still be used for exact XYZ values."))
-                .AutoWrapText(true)
-            ]
-        ];
-    }
-
-    virtual int32 OnPaint(
-        const FPaintArgs& Args,
-        const FGeometry& AllottedGeometry,
-        const FSlateRect& MyCullingRect,
-        FSlateWindowElementList& OutDrawElements,
-        int32 LayerId,
-        const FWidgetStyle& InWidgetStyle,
-        bool bParentEnabled) const override
-    {
-        const FVector2D Size = AllottedGeometry.GetLocalSize();
-        const FVector2D Center = Size * 0.5f;
-
-        FSlateDrawElement::MakeBox(
-            OutDrawElements,
-            LayerId,
-            AllottedGeometry.ToPaintGeometry(),
-            FCoreStyle::Get().GetBrush("WhiteBrush"),
-            ESlateDrawEffect::None,
-            FLinearColor(0.015f, 0.015f, 0.018f, 1.f));
-
-        ++LayerId;
-        for (int32 Grid = -10; Grid <= 10; ++Grid)
-        {
-            TArray<FVector2D> XLine = {ProjectPoint(FVector(-100.f, Grid * 10.f, 0.f), Center), ProjectPoint(FVector(100.f, Grid * 10.f, 0.f), Center)};
-            TArray<FVector2D> YLine = {ProjectPoint(FVector(Grid * 10.f, -100.f, 0.f), Center), ProjectPoint(FVector(Grid * 10.f, 100.f, 0.f), Center)};
-            FSlateDrawElement::MakeLines(OutDrawElements, LayerId, AllottedGeometry.ToPaintGeometry(), XLine, ESlateDrawEffect::None, FLinearColor(0.08f, 0.08f, 0.09f, 1.f));
-            FSlateDrawElement::MakeLines(OutDrawElements, LayerId, AllottedGeometry.ToPaintGeometry(), YLine, ESlateDrawEffect::None, FLinearColor(0.08f, 0.08f, 0.09f, 1.f));
-        }
-
-        DrawAxis(OutDrawElements, AllottedGeometry, LayerId + 1, Center, FVector(90.f, 0.f, 0.f), FLinearColor::Red);
-        DrawAxis(OutDrawElements, AllottedGeometry, LayerId + 1, Center, FVector(0.f, 90.f, 0.f), FLinearColor::Green);
-        DrawAxis(OutDrawElements, AllottedGeometry, LayerId + 1, Center, FVector(0.f, 0.f, 90.f), FLinearColor::Blue);
-
-        LayerId += 2;
-        TArray<FVector2D> Polyline;
-        if (Points)
-        {
-            for (int32 Index = 0; Index < Points->Num(); ++Index)
-            {
-                const FVector& Point = (*Points)[Index];
-                const FVector2D ScreenPoint = ProjectPoint(Point, Center);
-                Polyline.Add(ScreenPoint);
-                const bool bHighlighted = Index == HoveredIndex || Index == DraggedIndex;
-                FSlateDrawElement::MakeBox(
-                    OutDrawElements,
-                    LayerId + 1,
-                    AllottedGeometry.ToPaintGeometry(FVector2D(bHighlighted ? 10.f : 7.f), FSlateLayoutTransform(ScreenPoint - FVector2D(bHighlighted ? 5.f : 3.5f))),
-                    FCoreStyle::Get().GetBrush("WhiteBrush"),
-                    ESlateDrawEffect::None,
-                    bHighlighted ? FLinearColor::Yellow : FLinearColor(0.1f, 0.65f, 1.f, 1.f));
-            }
-        }
-
-        if (Polyline.Num() > 1)
-        {
-            TArray<FVector2D> ClosedPolyline = Polyline;
-            if (ClosedPolyline.Num() > 2)
-            {
-                const FVector2D FirstPoint = ClosedPolyline[0];
-                ClosedPolyline.Add(FirstPoint);
-            }
-            FSlateDrawElement::MakeLines(OutDrawElements, LayerId, AllottedGeometry.ToPaintGeometry(), ClosedPolyline, ESlateDrawEffect::None, FLinearColor(0.1f, 0.65f, 1.f, 1.f), true, 1.5f);
-        }
-
-        return LayerId + 2;
-    }
-
-    virtual FReply OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override
-    {
-        if (!Points)
-        {
-            return FReply::Unhandled();
-        }
-
-        const FVector2D LocalPosition = MyGeometry.AbsoluteToLocal(MouseEvent.GetScreenSpacePosition());
-        UpdateHoveredIndex(MyGeometry, LocalPosition);
-
-        if (MouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
-        {
-            if (Points->IsValidIndex(HoveredIndex))
-            {
-                Points->RemoveAt(HoveredIndex);
-                HoveredIndex = INDEX_NONE;
-                DraggedIndex = INDEX_NONE;
-                OnPointsChanged.ExecuteIfBound();
-            }
-            return FReply::Handled();
-        }
-
-        if (MouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
-        {
-            if (Points->IsValidIndex(HoveredIndex))
-            {
-                DraggedIndex = HoveredIndex;
-            }
-            else
-            {
-                Points->Add(UnprojectToXYPlane(MyGeometry, LocalPosition, 0.f));
-                DraggedIndex = Points->Num() - 1;
-                HoveredIndex = DraggedIndex;
-                OnPointsChanged.ExecuteIfBound();
-            }
-
-            return FReply::Handled().CaptureMouse(AsShared());
-        }
-
-        return FReply::Unhandled();
-    }
-
-    virtual FReply OnMouseMove(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override
-    {
-        if (!Points)
-        {
-            return FReply::Unhandled();
-        }
-
-        const FVector2D LocalPosition = MyGeometry.AbsoluteToLocal(MouseEvent.GetScreenSpacePosition());
-        if (Points->IsValidIndex(DraggedIndex) && MouseEvent.IsMouseButtonDown(EKeys::LeftMouseButton))
-        {
-            const float ExistingZ = (*Points)[DraggedIndex].Z;
-            (*Points)[DraggedIndex] = UnprojectToXYPlane(MyGeometry, LocalPosition, ExistingZ);
-            HoveredIndex = DraggedIndex;
-            OnPointsChanged.ExecuteIfBound();
-            return FReply::Handled();
-        }
-
-        UpdateHoveredIndex(MyGeometry, LocalPosition);
-        return FReply::Handled();
-    }
-
-    virtual FReply OnMouseButtonUp(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override
-    {
-        if (MouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
-        {
-            DraggedIndex = INDEX_NONE;
-            return FReply::Handled().ReleaseMouseCapture();
-        }
-
-        return FReply::Unhandled();
-    }
-
-private:
-    static constexpr float ViewScale = 4.f;
-    TArray<FVector>* Points = nullptr;
-    FSimpleDelegate OnPointsChanged;
-    int32 HoveredIndex = INDEX_NONE;
-    int32 DraggedIndex = INDEX_NONE;
-
-    static FVector2D ProjectPoint(const FVector& Point, const FVector2D& Center)
-    {
-        return FVector2D(
-            Center.X + (Point.X - Point.Y) * ViewScale,
-            Center.Y + (Point.X + Point.Y) * ViewScale * 0.35f - Point.Z * ViewScale);
-    }
-
-    static FVector UnprojectToXYPlane(const FGeometry& Geometry, const FVector2D& LocalPosition, const float Z)
-    {
-        const FVector2D Center = Geometry.GetLocalSize() * 0.5f;
-        const float A = (LocalPosition.X - Center.X) / ViewScale;
-        const float B = (LocalPosition.Y - Center.Y + Z * ViewScale) / (ViewScale * 0.35f);
-        return FVector((A + B) * 0.5f, (B - A) * 0.5f, Z);
-    }
-
-    void UpdateHoveredIndex(const FGeometry& Geometry, const FVector2D& LocalPosition)
-    {
-        HoveredIndex = INDEX_NONE;
-        if (!Points)
-        {
-            return;
-        }
-
-        const FVector2D Center = Geometry.GetLocalSize() * 0.5f;
-        float BestDistanceSquared = FMath::Square(12.f);
-        for (int32 Index = 0; Index < Points->Num(); ++Index)
-        {
-            const float DistanceSquared = FVector2D::DistSquared(ProjectPoint((*Points)[Index], Center), LocalPosition);
-            if (DistanceSquared < BestDistanceSquared)
-            {
-                BestDistanceSquared = DistanceSquared;
-                HoveredIndex = Index;
-            }
-        }
-    }
-
-    static void DrawAxis(FSlateWindowElementList& OutDrawElements, const FGeometry& Geometry, int32 LayerId, const FVector2D& Center, const FVector& Axis, const FLinearColor& Color)
-    {
-        TArray<FVector2D> AxisLine = {ProjectPoint(FVector::ZeroVector, Center), ProjectPoint(Axis, Center)};
-        FSlateDrawElement::MakeLines(OutDrawElements, LayerId, Geometry.ToPaintGeometry(), AxisLine, ESlateDrawEffect::None, Color, true, 2.f);
-    }
-};
-
 class SConvexCreationDialog final : public SCompoundWidget
 {
 public:
@@ -608,16 +388,6 @@ public:
                 + SUniformGridPanel::Slot(1, 0)
                 [SNew(SEditableTextBox).Text(this, &SConvexCreationDialog::GetBoneText).OnTextCommitted(this, &SConvexCreationDialog::OnBoneCommitted)]
             ]
-            + SVerticalBox::Slot().AutoHeight().Padding(6)
-            [
-                SNew(SBox)
-                .HeightOverride(220.f)
-                [
-                    SNew(SConvexPointViewport)
-                    .Points(&VisualPoints)
-                    .OnPointsChanged(FSimpleDelegate::CreateSP(this, &SConvexCreationDialog::SyncTextFromViewport))
-                ]
-            ]
             + SVerticalBox::Slot().FillHeight(1.f).Padding(6)
             [
                 SAssignNew(PointsTextBox, SMultiLineEditableTextBox)
@@ -643,7 +413,6 @@ private:
     FName BoneName;
     FString PointsText;
     FString Status;
-    TArray<FVector> VisualPoints;
     TSharedPtr<SMultiLineEditableTextBox> PointsTextBox;
 
     FText GetBoneText() const { return FText::FromName(BoneName); }
@@ -673,7 +442,6 @@ private:
     FReply OnPreview()
     {
         const TArray<FVector> Points = ParsePointsFromText();
-        VisualPoints = Points;
         Status = FString::Printf(TEXT("Preview: %d point(s). At least 4 non-coplanar points are required."), Points.Num());
         return FReply::Handled();
     }
@@ -749,7 +517,6 @@ private:
         }
 
         PointsText.Reset();
-        VisualPoints = Points;
         for (const FVector& Point : Points)
         {
             PointsText += FString::Printf(TEXT("%.3f %.3f %.3f\n"), Point.X, Point.Y, Point.Z);
@@ -771,20 +538,6 @@ private:
         }
     }
 
-    void SyncTextFromViewport()
-    {
-        PointsText.Reset();
-        for (const FVector& Point : VisualPoints)
-        {
-            PointsText += FString::Printf(TEXT("%.3f %.3f %.3f\n"), Point.X, Point.Y, Point.Z);
-        }
-
-        if (PointsTextBox.IsValid())
-        {
-            PointsTextBox->SetText(FText::FromString(PointsText));
-        }
-        Status = FString::Printf(TEXT("Viewport point count: %d"), VisualPoints.Num());
-    }
 };
 
 class SConvexEditDialog final : public SCompoundWidget
@@ -822,16 +575,6 @@ public:
                 + SUniformGridPanel::Slot(1, 1)
                 [SNew(SNumericEntryBox<int32>).Value(this, &SConvexEditDialog::GetConvexIndex).MinValue(0).OnValueChanged(this, &SConvexEditDialog::OnConvexIndexChanged)]
             ]
-            + SVerticalBox::Slot().AutoHeight().Padding(6)
-            [
-                SNew(SBox)
-                .HeightOverride(220.f)
-                [
-                    SNew(SConvexPointViewport)
-                    .Points(&VisualPoints)
-                    .OnPointsChanged(FSimpleDelegate::CreateSP(this, &SConvexEditDialog::SyncTextFromViewport))
-                ]
-            ]
             + SVerticalBox::Slot().FillHeight(1.f).Padding(6)
             [
                 SAssignNew(PointsTextBox, SMultiLineEditableTextBox)
@@ -858,7 +601,6 @@ private:
     int32 ConvexIndex = 0;
     FString PointsText;
     FString Status;
-    TArray<FVector> VisualPoints;
     TSharedPtr<SMultiLineEditableTextBox> PointsTextBox;
 
     FText GetBoneText() const { return FText::FromName(BoneName); }
@@ -889,7 +631,6 @@ private:
     FReply OnPreview()
     {
         const TArray<FVector> Points = ParsePointsFromText();
-        VisualPoints = Points;
         Status = FString::Printf(TEXT("Preview edited convex %d on '%s': %d point(s)."), ConvexIndex, *BoneName.ToString(), Points.Num());
         return FReply::Handled();
     }
@@ -913,7 +654,6 @@ private:
     void LoadCurrentConvex()
     {
         PointsText.Reset();
-        VisualPoints.Reset();
         const USkeletalBodySetup* BodySetup = FVehiclePhATBodyUtils::FindBodySetup(PhysicsAsset, BoneName);
         if (!BodySetup)
         {
@@ -930,7 +670,6 @@ private:
         const FKConvexElem& Convex = BodySetup->AggGeom.ConvexElems[ConvexIndex];
         for (const FVector& Vertex : Convex.VertexData)
         {
-            VisualPoints.Add(Vertex);
             PointsText += FString::Printf(TEXT("%.3f %.3f %.3f\n"), Vertex.X, Vertex.Y, Vertex.Z);
         }
         Status = FString::Printf(TEXT("Loaded convex %d from '%s' with %d vertices."), ConvexIndex, *BoneName.ToString(), Convex.VertexData.Num());
@@ -965,20 +704,6 @@ private:
         return Points;
     }
 
-    void SyncTextFromViewport()
-    {
-        PointsText.Reset();
-        for (const FVector& Point : VisualPoints)
-        {
-            PointsText += FString::Printf(TEXT("%.3f %.3f %.3f\n"), Point.X, Point.Y, Point.Z);
-        }
-
-        if (PointsTextBox.IsValid())
-        {
-            PointsTextBox->SetText(FText::FromString(PointsText));
-        }
-        Status = FString::Printf(TEXT("Viewport edited convex %d point count: %d"), ConvexIndex, VisualPoints.Num());
-    }
 };
 
 class SVehiclePhATToolsPanel final : public SCompoundWidget

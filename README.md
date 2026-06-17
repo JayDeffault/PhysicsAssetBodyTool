@@ -114,21 +114,9 @@ Direct viewport vertex dragging and snap-to-skeletal-mesh-vertex editing remain 
 
 Mirror apply now duplicates source body setups for newly created target bodies instead of constructing blank body setups first, invalidates target body physics data after mirrored geometry is assigned, and drops invalid mirrored convex elements with fewer than four vertices or NaN coordinates. These guards are intended to avoid debugger breakpoints/asserts during mirror while still creating valid mirrored bodies.
 
-## Visual convex point placement
+## Native PhAT convex editing direction
 
-Create Convex Bodies and Edit Convex Bodies now include an MVP visual point viewport. Left-clicking in the viewport adds local-space vertices on the XY plane and immediately synchronizes the editable point list. The text list remains available for precise XYZ edits, including Z values, until a full mesh-surface picking viewport is implemented.
-
-## 3D convex viewport controls
-
-The visual convex point widget now uses a lightweight isometric 3D projection with X/Y/Z axes. Hovered vertices are highlighted yellow. `LMB` on empty space creates a vertex, `LMB` on a highlighted vertex drags/moves it while preserving its current Z value, and `RMB` deletes the highlighted vertex. Use the synchronized text list for exact numeric Z edits until mesh-surface raycast snapping is added.
-
-## Inline convex editing mode
-
-Create Convex Bodies and Edit Convex Bodies no longer open modal windows from the Vehicle PhAT Tools panel. They activate inline inside the panel so the user can keep the Physics Asset Editor viewport visible while placing/editing convex points. The current MVP still uses the plugin's lightweight 3D point widget; true direct placement inside the native PhAT viewport with skeletal-mesh vertex snapping remains the next integration step.
-
-## Native PhAT viewport requirement
-
-The requested final workflow is direct interaction in the native Physics Asset Editor viewport, with the Skeletal Mesh visible, camera rotation handled by PhAT, and convex vertices snapped to Skeletal Mesh vertices/surface hits. The current Slate point widget is only a temporary fallback and should be replaced by a Physics Asset Editor viewport/client extension before production use. Convex preview lines are drawn closed so point clouds visually represent a closed hull while editing.
+The temporary custom Slate point viewport has been removed from the Vehicle PhAT Tools panel. Convex creation/editing should be driven by the standard native Physics Asset Editor viewport, where the Skeletal Mesh and physics bodies are visible and camera controls already work. The remaining UI keeps text/list-based fallback controls, while `FVehiclePhATNativeConvexTool` provides the state and helper API that a PhAT viewport/client integration should call for vertex snapping, hover, create/move/delete, and apply.
 
 ## Native convex tool state scaffold
 
