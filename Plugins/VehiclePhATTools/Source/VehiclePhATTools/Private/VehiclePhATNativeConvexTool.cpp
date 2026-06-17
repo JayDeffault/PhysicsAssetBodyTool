@@ -23,6 +23,30 @@ int32 MarkerCount = 0;
 int32 MarkerAllocatedCount = 0;
 TArray<FVector> Points;
 TArray<FVector> LastLiveUpdatePoints;
+TArray<FVector> LastObservedMarkerPoints;
+double LastObservedMarkerChangeTime = 0.0;
+bool bPendingDebouncedUpdate = false;
+}
+
+namespace
+{
+bool ArePointArraysNearlyEqual(const TArray<FVector>& A, const TArray<FVector>& B, float Tolerance)
+{
+    if (A.Num() != B.Num())
+    {
+        return false;
+    }
+
+    for (int32 PointIndex = 0; PointIndex < A.Num(); ++PointIndex)
+    {
+        if (!A[PointIndex].Equals(B[PointIndex], Tolerance))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
 }
 
 void FVehiclePhATNativeConvexTool::StartCreate(UPhysicsAsset* PhysicsAsset, FName BodyBone)
@@ -39,6 +63,9 @@ void FVehiclePhATNativeConvexTool::StartCreate(UPhysicsAsset* PhysicsAsset, FNam
     MarkerAllocatedCount = 0;
     Points.Reset();
     LastLiveUpdatePoints.Reset();
+    LastObservedMarkerPoints.Reset();
+    LastObservedMarkerChangeTime = 0.0;
+    bPendingDebouncedUpdate = false;
     UE_LOG(LogVehiclePhATTools, Log, TEXT("Native convex create mode started for body '%s'."), *BodyBone.ToString());
 }
 
@@ -56,6 +83,9 @@ void FVehiclePhATNativeConvexTool::StartEdit(UPhysicsAsset* PhysicsAsset, FName 
     MarkerAllocatedCount = 0;
     Points.Reset();
     LastLiveUpdatePoints.Reset();
+    LastObservedMarkerPoints.Reset();
+    LastObservedMarkerChangeTime = 0.0;
+    bPendingDebouncedUpdate = false;
     LoadExistingConvex();
     UE_LOG(LogVehiclePhATTools, Log, TEXT("Native convex edit mode started for body '%s' convex %d."), *BodyBone.ToString(), InConvexIndex);
 }
@@ -74,6 +104,9 @@ void FVehiclePhATNativeConvexTool::Stop()
     MarkerAllocatedCount = 0;
     Points.Reset();
     LastLiveUpdatePoints.Reset();
+    LastObservedMarkerPoints.Reset();
+    LastObservedMarkerChangeTime = 0.0;
+    bPendingDebouncedUpdate = false;
 }
 
 bool FVehiclePhATNativeConvexTool::IsActive()
@@ -287,6 +320,9 @@ bool FVehiclePhATNativeConvexTool::RebuildViewportVertexMarkers(float MarkerRadi
 
     MarkerCount = Points.Num();
     LastLiveUpdatePoints = Points;
+    LastObservedMarkerPoints = Points;
+    LastObservedMarkerChangeTime = FPlatformTime::Seconds();
+    bPendingDebouncedUpdate = false;
     FVehiclePhATBodyUtils::MarkAssetChanged(ActivePhysicsAsset);
     OutMessage = FString::Printf(TEXT("Created %d native PhAT viewport vertex marker sphere(s). Move these markers with the standard PhAT transform gizmo, then Apply Convex."), MarkerCount);
     return true;
@@ -374,18 +410,7 @@ bool FVehiclePhATNativeConvexTool::LiveUpdateConvexFromViewportVertexMarkers(FSt
         return false;
     }
 
-    bool bPointsChanged = Points.Num() != LastLiveUpdatePoints.Num();
-    if (!bPointsChanged)
-    {
-        for (int32 PointIndex = 0; PointIndex < Points.Num(); ++PointIndex)
-        {
-            if (!Points[PointIndex].Equals(LastLiveUpdatePoints[PointIndex], 0.01f))
-            {
-                bPointsChanged = true;
-                break;
-            }
-        }
-    }
+    const bool bPointsChanged = !ArePointArraysNearlyEqual(Points, LastLiveUpdatePoints, 0.01f);
 
     if (!bPointsChanged)
     {
@@ -420,6 +445,54 @@ bool FVehiclePhATNativeConvexTool::LiveUpdateConvexFromViewportVertexMarkers(FSt
     FVehiclePhATBodyUtils::MarkBodySetupGeometryChanged(ActivePhysicsAsset, BodySetup);
     OutMessage = FString::Printf(TEXT("Live-updated convex %d from %d viewport marker point(s)."), ConvexIndex, Points.Num());
     return true;
+}
+
+bool FVehiclePhATNativeConvexTool::DebouncedUpdateConvexFromViewportVertexMarkers(float QuietDelaySeconds, FString& OutMessage)
+{
+    using namespace VehiclePhATNativeConvexToolState;
+    if (!IsActive())
+    {
+        OutMessage = TEXT("Native convex tool is inactive.");
+        return false;
+    }
+
+    FString PullMessage;
+    if (!PullPointsFromViewportVertexMarkers(PullMessage))
+    {
+        OutMessage = PullMessage;
+        return false;
+    }
+
+    const double Now = FPlatformTime::Seconds();
+    if (!ArePointArraysNearlyEqual(Points, LastObservedMarkerPoints, 0.01f))
+    {
+        LastObservedMarkerPoints = Points;
+        LastObservedMarkerChangeTime = Now;
+        bPendingDebouncedUpdate = true;
+        OutMessage = TEXT("Marker movement detected; waiting for transform gizmo release/settle before updating convex.");
+        return false;
+    }
+
+    if (!bPendingDebouncedUpdate)
+    {
+        OutMessage = TEXT("No pending marker movement to apply.");
+        return false;
+    }
+
+    const double QuietDelay = FMath::Max(0.0, static_cast<double>(QuietDelaySeconds));
+    if (Now - LastObservedMarkerChangeTime < QuietDelay)
+    {
+        OutMessage = TEXT("Marker movement is still settling.");
+        return false;
+    }
+
+    const bool bUpdated = LiveUpdateConvexFromViewportVertexMarkers(OutMessage);
+    if (bUpdated)
+    {
+        bPendingDebouncedUpdate = false;
+        LastObservedMarkerPoints = Points;
+    }
+    return bUpdated;
 }
 
 void FVehiclePhATNativeConvexTool::AddPoint(const FVector& Point)

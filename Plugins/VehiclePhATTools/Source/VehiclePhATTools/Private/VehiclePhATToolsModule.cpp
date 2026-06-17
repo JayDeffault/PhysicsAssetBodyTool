@@ -428,7 +428,7 @@ private:
         if (bLiveUpdateConvex && FVehiclePhATNativeConvexTool::IsActive())
         {
             FString Message;
-            if (FVehiclePhATNativeConvexTool::LiveUpdateConvexFromViewportVertexMarkers(Message))
+            if (FVehiclePhATNativeConvexTool::DebouncedUpdateConvexFromViewportVertexMarkers(0.6f, Message))
             {
                 SetPointsTextFromPoints(FVehiclePhATNativeConvexTool::GetPoints());
                 SyncTextBox();
@@ -689,7 +689,7 @@ private:
         if (bLiveUpdateConvex && FVehiclePhATNativeConvexTool::IsActive())
         {
             FString Message;
-            if (FVehiclePhATNativeConvexTool::LiveUpdateConvexFromViewportVertexMarkers(Message))
+            if (FVehiclePhATNativeConvexTool::DebouncedUpdateConvexFromViewportVertexMarkers(0.6f, Message))
             {
                 ConvexIndex = FMath::Max(0, FVehiclePhATNativeConvexTool::GetConvexIndex());
                 SetPointsTextFromPoints(FVehiclePhATNativeConvexTool::GetPoints());
