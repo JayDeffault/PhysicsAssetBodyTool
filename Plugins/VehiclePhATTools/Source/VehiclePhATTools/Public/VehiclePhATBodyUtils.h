@@ -20,6 +20,7 @@ public:
     static TArray<FName> GetSkeletonBoneNames(const UPhysicsAsset* PhysicsAsset);
     static void RefreshPhysicsAsset(UPhysicsAsset* PhysicsAsset);
     static void MarkAssetChanged(UPhysicsAsset* PhysicsAsset);
+    static void MarkBodySetupGeometryChanged(UPhysicsAsset* PhysicsAsset, USkeletalBodySetup* BodySetup);
     static TArray<FVehiclePhATValidationMessage> ValidatePhysicsAsset(UPhysicsAsset* PhysicsAsset, const FString& MirrorSourcePattern = TEXT("*l*"), const FString& MirrorTargetPattern = TEXT("*r*"));
     static bool CopyBodyShapeSettings(const USkeletalBodySetup* SourceBody, USkeletalBodySetup* TargetBody, EVehiclePhATShapeMismatchPolicy Policy, FString& OutMessage);
     static bool CopyBodySetupProperties(const USkeletalBodySetup* SourceBody, USkeletalBodySetup* TargetBody);

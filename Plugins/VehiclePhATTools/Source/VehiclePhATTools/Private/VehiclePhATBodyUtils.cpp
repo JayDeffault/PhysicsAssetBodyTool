@@ -120,7 +120,22 @@ void FVehiclePhATBodyUtils::MarkAssetChanged(UPhysicsAsset* PhysicsAsset)
     }
 
     RefreshPhysicsAsset(PhysicsAsset);
+    PhysicsAsset->PostEditChange();
     PhysicsAsset->MarkPackageDirty();
+}
+
+void FVehiclePhATBodyUtils::MarkBodySetupGeometryChanged(UPhysicsAsset* PhysicsAsset, USkeletalBodySetup* BodySetup)
+{
+    if (!PhysicsAsset || !BodySetup)
+    {
+        MarkAssetChanged(PhysicsAsset);
+        return;
+    }
+
+    BodySetup->InvalidatePhysicsData();
+    BodySetup->CreatePhysicsMeshes();
+    BodySetup->PostEditChange();
+    MarkAssetChanged(PhysicsAsset);
 }
 
 TArray<FVehiclePhATValidationMessage> FVehiclePhATBodyUtils::ValidatePhysicsAsset(UPhysicsAsset* PhysicsAsset, const FString& MirrorSourcePattern, const FString& MirrorTargetPattern)
