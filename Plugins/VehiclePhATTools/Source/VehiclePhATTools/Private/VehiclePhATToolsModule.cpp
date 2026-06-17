@@ -923,7 +923,7 @@ private:
             [
                 SNew(SConvexCreationDialog).PhysicsAsset(PhysicsAsset).DefaultBone(Bone)
             ];
-            Status = TEXT("Create Convex Bodies is active inline. No modal window was opened.");
+            Status = TEXT("Create Convex Bodies is active for the native PhAT viewport. Select/snapped points in the standard viewport; selected vertices can be moved with the viewport transform gizmo.");
         }
         return FReply::Handled();
     }
@@ -944,7 +944,7 @@ private:
             [
                 SNew(SConvexEditDialog).PhysicsAsset(PhysicsAsset).DefaultBone(Bone)
             ];
-            Status = TEXT("Edit Convex Bodies is active inline. No modal window was opened.");
+            Status = TEXT("Edit Convex Bodies is active for the native PhAT viewport. Hover/select an existing convex vertex and move it with the viewport transform gizmo.");
         }
         return FReply::Handled();
     }

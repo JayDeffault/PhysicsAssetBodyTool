@@ -51,6 +51,18 @@ public:
 
     static void SetHoverIndex(int32 Index);
     static int32 GetHoverIndex();
+
+    // Native PhAT viewport bridge:
+    // - call SelectNearestPointToRay / SelectHoveredPoint from viewport hit-testing;
+    // - call GetSelectedPointTransform from the viewport client's widget-location path;
+    // - call ApplySelectedPointDelta from the viewport client's transform-gizmo delta path.
+    static bool HasSelectedPoint();
+    static int32 GetSelectedPointIndex();
+    static bool SelectHoveredPoint();
+    static bool SelectNearestPointToRay(const FVector& RayOrigin, const FVector& RayDirection, float PixelWorldTolerance, float MaxRayDistance);
+    static bool GetSelectedPointTransform(FTransform& OutTransform);
+    static bool MoveSelectedPoint(const FVector& NewPosition, bool bSnapToMesh, float MaxSnapDistance);
+    static bool ApplySelectedPointDelta(const FVector& Delta, bool bSnapToMesh, float MaxSnapDistance);
     static void AddPoint(const FVector& Point);
     static void AddPointSnappedToMesh(const FVector& Point, float MaxSnapDistance);
     static bool MoveHoveredPoint(const FVector& Point);

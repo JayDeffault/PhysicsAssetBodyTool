@@ -108,7 +108,7 @@ The full viewport vertex picker and automatic skeletal-mesh skin-weight vertex s
 
 Current MVP 5 coverage includes a safe convex edit workflow. The Convex Edit Tool loads an existing `FKConvexElem` by body bone and convex index, extracts its `VertexData` into an editable local-space point cloud, previews the parsed point count, and rebuilds/replaces the selected convex element through `FVehiclePhATConvexUtils::ReplaceConvexFromPoints` with Undo/Redo support.
 
-Direct viewport vertex dragging and snap-to-skeletal-mesh-vertex editing remain future work.
+Direct viewport rendering/input still has to be connected inside the native Physics Asset Editor viewport client, but the plugin state now supports selecting a convex point and moving it through the standard editor transform gizmo once that viewport client forwards widget deltas.
 
 ## Mirror troubleshooting notes
 
@@ -121,6 +121,10 @@ The temporary custom Slate point viewport has been removed from the Vehicle PhAT
 ## Native convex tool state scaffold
 
 A shared `FVehiclePhATNativeConvexTool` state object now tracks create/edit mode, active PhysicsAsset/body, convex index, hover index, and editable convex points. This is the bridge point for the next implementation step: wiring native Physics Asset Editor viewport hit-testing to `AddPoint`, `MoveHoveredPoint`, `DeleteHoveredPoint`, and `Apply` so the PhAT viewport can drive the convex workflow directly.
+
+## Native PhAT transform-gizmo bridge
+
+`FVehiclePhATNativeConvexTool` now tracks a selected convex vertex separately from the hovered vertex. The native PhAT viewport client can call `SelectNearestPointToRay` or `SelectHoveredPoint` on click, return `GetSelectedPointTransform` as the widget location, and call `ApplySelectedPointDelta` from the viewport transform-gizmo delta handler. This keeps vertex movement in the standard PhAT viewport instead of opening a separate viewport.
 
 ## Skeletal mesh vertex snapping scaffold
 

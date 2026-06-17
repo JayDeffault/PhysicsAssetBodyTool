@@ -16,6 +16,7 @@ TWeakObjectPtr<UPhysicsAsset> PhysicsAsset;
 FName BodyBone = NAME_None;
 int32 ConvexIndex = INDEX_NONE;
 int32 HoverIndex = INDEX_NONE;
+int32 SelectedIndex = INDEX_NONE;
 TArray<FVector> Points;
 }
 
@@ -27,6 +28,7 @@ void FVehiclePhATNativeConvexTool::StartCreate(UPhysicsAsset* PhysicsAsset, FNam
     VehiclePhATNativeConvexToolState::BodyBone = BodyBone;
     ConvexIndex = INDEX_NONE;
     HoverIndex = INDEX_NONE;
+    SelectedIndex = INDEX_NONE;
     Points.Reset();
     UE_LOG(LogVehiclePhATTools, Log, TEXT("Native convex create mode started for body '%s'."), *BodyBone.ToString());
 }
@@ -39,6 +41,7 @@ void FVehiclePhATNativeConvexTool::StartEdit(UPhysicsAsset* PhysicsAsset, FName 
     VehiclePhATNativeConvexToolState::BodyBone = BodyBone;
     ConvexIndex = InConvexIndex;
     HoverIndex = INDEX_NONE;
+    SelectedIndex = INDEX_NONE;
     Points.Reset();
     LoadExistingConvex();
     UE_LOG(LogVehiclePhATTools, Log, TEXT("Native convex edit mode started for body '%s' convex %d."), *BodyBone.ToString(), InConvexIndex);
@@ -52,6 +55,7 @@ void FVehiclePhATNativeConvexTool::Stop()
     BodyBone = NAME_None;
     ConvexIndex = INDEX_NONE;
     HoverIndex = INDEX_NONE;
+    SelectedIndex = INDEX_NONE;
     Points.Reset();
 }
 
@@ -95,16 +99,125 @@ int32 FVehiclePhATNativeConvexTool::GetHoverIndex()
     return VehiclePhATNativeConvexToolState::HoverIndex;
 }
 
+bool FVehiclePhATNativeConvexTool::HasSelectedPoint()
+{
+    using namespace VehiclePhATNativeConvexToolState;
+    return Points.IsValidIndex(SelectedIndex);
+}
+
+int32 FVehiclePhATNativeConvexTool::GetSelectedPointIndex()
+{
+    return VehiclePhATNativeConvexToolState::SelectedIndex;
+}
+
+bool FVehiclePhATNativeConvexTool::SelectHoveredPoint()
+{
+    using namespace VehiclePhATNativeConvexToolState;
+    if (!Points.IsValidIndex(HoverIndex))
+    {
+        SelectedIndex = INDEX_NONE;
+        return false;
+    }
+
+    SelectedIndex = HoverIndex;
+    return true;
+}
+
+bool FVehiclePhATNativeConvexTool::SelectNearestPointToRay(const FVector& RayOrigin, const FVector& RayDirection, float PixelWorldTolerance, float MaxRayDistance)
+{
+    using namespace VehiclePhATNativeConvexToolState;
+    const FVector SafeRayDirection = RayDirection.GetSafeNormal();
+    if (!IsActive() || SafeRayDirection.IsNearlyZero())
+    {
+        SelectedIndex = INDEX_NONE;
+        HoverIndex = INDEX_NONE;
+        return false;
+    }
+
+    const float ToleranceSquared = FMath::Square(FMath::Max(0.f, PixelWorldTolerance));
+    const float MaxProjectedDistance = MaxRayDistance > 0.f ? MaxRayDistance : TNumericLimits<float>::Max();
+    float BestDistanceSquared = ToleranceSquared > 0.f ? ToleranceSquared : TNumericLimits<float>::Max();
+    int32 BestIndex = INDEX_NONE;
+
+    for (int32 PointIndex = 0; PointIndex < Points.Num(); ++PointIndex)
+    {
+        const FVector RayToPoint = Points[PointIndex] - RayOrigin;
+        const float ProjectedDistance = FVector::DotProduct(RayToPoint, SafeRayDirection);
+        if (ProjectedDistance < 0.f || ProjectedDistance > MaxProjectedDistance)
+        {
+            continue;
+        }
+
+        const FVector ClosestPointOnRay = RayOrigin + SafeRayDirection * ProjectedDistance;
+        const float DistanceSquared = FVector::DistSquared(Points[PointIndex], ClosestPointOnRay);
+        if (DistanceSquared <= BestDistanceSquared)
+        {
+            BestDistanceSquared = DistanceSquared;
+            BestIndex = PointIndex;
+        }
+    }
+
+    HoverIndex = BestIndex;
+    SelectedIndex = BestIndex;
+    return BestIndex != INDEX_NONE;
+}
+
+bool FVehiclePhATNativeConvexTool::GetSelectedPointTransform(FTransform& OutTransform)
+{
+    using namespace VehiclePhATNativeConvexToolState;
+    if (!Points.IsValidIndex(SelectedIndex))
+    {
+        return false;
+    }
+
+    OutTransform = FTransform(Points[SelectedIndex]);
+    return true;
+}
+
+bool FVehiclePhATNativeConvexTool::MoveSelectedPoint(const FVector& NewPosition, bool bSnapToMesh, float MaxSnapDistance)
+{
+    using namespace VehiclePhATNativeConvexToolState;
+    if (!Points.IsValidIndex(SelectedIndex))
+    {
+        return false;
+    }
+
+    FVector TargetPosition = NewPosition;
+    if (bSnapToMesh)
+    {
+        SnapPointToNearestPreviewMeshVertex(NewPosition, MaxSnapDistance, TargetPosition);
+    }
+
+    Points[SelectedIndex] = TargetPosition;
+    HoverIndex = SelectedIndex;
+    return true;
+}
+
+bool FVehiclePhATNativeConvexTool::ApplySelectedPointDelta(const FVector& Delta, bool bSnapToMesh, float MaxSnapDistance)
+{
+    using namespace VehiclePhATNativeConvexToolState;
+    if (!Points.IsValidIndex(SelectedIndex))
+    {
+        return false;
+    }
+
+    return MoveSelectedPoint(Points[SelectedIndex] + Delta, bSnapToMesh, MaxSnapDistance);
+}
+
 void FVehiclePhATNativeConvexTool::AddPoint(const FVector& Point)
 {
-    VehiclePhATNativeConvexToolState::Points.Add(Point);
+    using namespace VehiclePhATNativeConvexToolState;
+    SelectedIndex = Points.Add(Point);
+    HoverIndex = SelectedIndex;
 }
 
 void FVehiclePhATNativeConvexTool::AddPointSnappedToMesh(const FVector& Point, float MaxSnapDistance)
 {
+    using namespace VehiclePhATNativeConvexToolState;
     FVector SnappedPoint = Point;
     SnapPointToNearestPreviewMeshVertex(Point, MaxSnapDistance, SnappedPoint);
-    VehiclePhATNativeConvexToolState::Points.Add(SnappedPoint);
+    SelectedIndex = Points.Add(SnappedPoint);
+    HoverIndex = SelectedIndex;
 }
 
 bool FVehiclePhATNativeConvexTool::MoveHoveredPoint(const FVector& Point)
@@ -116,6 +229,7 @@ bool FVehiclePhATNativeConvexTool::MoveHoveredPoint(const FVector& Point)
     }
 
     Points[HoverIndex] = Point;
+    SelectedIndex = HoverIndex;
     return true;
 }
 
@@ -135,6 +249,14 @@ bool FVehiclePhATNativeConvexTool::DeleteHoveredPoint()
     }
 
     Points.RemoveAt(HoverIndex);
+    if (SelectedIndex == HoverIndex)
+    {
+        SelectedIndex = INDEX_NONE;
+    }
+    else if (SelectedIndex > HoverIndex)
+    {
+        --SelectedIndex;
+    }
     HoverIndex = INDEX_NONE;
     return true;
 }
@@ -290,6 +412,7 @@ bool FVehiclePhATNativeConvexTool::AddPointFromRay(const FVector& RayOrigin, con
 
     VehiclePhATNativeConvexToolState::Points.Add(SnappedPoint);
     VehiclePhATNativeConvexToolState::HoverIndex = VehiclePhATNativeConvexToolState::Points.Num() - 1;
+    VehiclePhATNativeConvexToolState::SelectedIndex = VehiclePhATNativeConvexToolState::HoverIndex;
     return true;
 }
 
@@ -328,11 +451,11 @@ bool FVehiclePhATNativeConvexTool::HandleViewportRayAction(EViewportAction Actio
         UpdateHoverFromRay(RayOrigin, RayDirection, MaxRayDistance);
         if (GetPoints().IsValidIndex(GetHoverIndex()))
         {
-            const bool bMoved = MoveHoveredPointFromRay(RayOrigin, RayDirection, MaxRayDistance);
-            OutMessage = bMoved
-                ? FString::Printf(TEXT("Moved convex point %d."), GetHoverIndex())
-                : TEXT("Could not move hovered convex point.");
-            return bMoved;
+            const bool bSelected = SelectHoveredPoint();
+            OutMessage = bSelected
+                ? FString::Printf(TEXT("Selected convex point %d for the PhAT transform gizmo."), GetSelectedPointIndex())
+                : TEXT("Could not select hovered convex point.");
+            return bSelected;
         }
 
         const bool bAdded = AddPointFromRay(RayOrigin, RayDirection, MaxRayDistance);
@@ -381,11 +504,12 @@ void FVehiclePhATNativeConvexTool::BuildViewportRenderData(TArray<FViewportPoint
     for (int32 PointIndex = 0; PointIndex < Points.Num(); ++PointIndex)
     {
         const bool bHovered = PointIndex == HoverIndex;
+        const bool bSelected = PointIndex == SelectedIndex;
         FViewportPoint& ViewportPoint = OutPoints.AddDefaulted_GetRef();
         ViewportPoint.Position = Points[PointIndex];
-        ViewportPoint.bHovered = bHovered;
-        ViewportPoint.Color = bHovered ? FLinearColor::Yellow : FLinearColor(0.1f, 0.65f, 1.f, 1.f);
-        ViewportPoint.Size = bHovered ? 14.f : 9.f;
+        ViewportPoint.bHovered = bHovered || bSelected;
+        ViewportPoint.Color = bHovered ? FLinearColor::Yellow : (bSelected ? FLinearColor(1.f, 0.55f, 0.f, 1.f) : FLinearColor(0.1f, 0.65f, 1.f, 1.f));
+        ViewportPoint.Size = (bHovered || bSelected) ? 14.f : 9.f;
     }
 
     if (Points.Num() < 2)
