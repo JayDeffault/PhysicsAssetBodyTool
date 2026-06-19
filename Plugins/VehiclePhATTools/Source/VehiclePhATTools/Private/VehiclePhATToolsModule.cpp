@@ -1020,7 +1020,7 @@ private:
 
         FString ReplaceMessage;
         const bool bReplaced = FVehiclePhATConvexUtils::ReplaceConvexFromPoints(PhysicsAsset, BodySetup, ConvexIndex, SymmetricPoints, ReplaceMessage);
-        OutMessage = FString::Printf(TEXT("Symmetry %s for selected convex %d on '%s' using WORLD axes %s%s%s: %d -> %d point(s). %s%s"),
+        OutMessage = FString::Printf(TEXT("Symmetry %s for selected convex %d on '%s' using one-way WORLD axes %s%s%s (negative -> positive around world 0): %d -> %d point(s). %s%s"),
             bReplaced ? TEXT("enabled/applied") : TEXT("failed"),
             ConvexIndex,
             *BoneName.ToString(),
@@ -1048,19 +1048,53 @@ private:
             return false;
         }
 
-        FBox WorldBounds(ForceInit);
-        for (const FVector& Point : SourcePoints)
-        {
-            WorldBounds += BodyToWorld.TransformPosition(Point);
-        }
-
-        const FVector WorldCenter = WorldBounds.GetCenter();
         TArray<int32> Axes;
         if (bSymmetryX) { Axes.Add(0); }
         if (bSymmetryY) { Axes.Add(1); }
         if (bSymmetryZ) { Axes.Add(2); }
 
-        OutSymmetricPoints = SourcePoints;
+        auto GetWorldAxisValue = [](const FVector& Point, int32 Axis)
+        {
+            switch (Axis)
+            {
+            case 0:
+                return Point.X;
+            case 1:
+                return Point.Y;
+            case 2:
+                return Point.Z;
+            default:
+                return 0.0;
+            }
+        };
+
+        TArray<FVector> SourceSidePoints;
+        for (const FVector& Point : SourcePoints)
+        {
+            const FVector WorldPoint = BodyToWorld.TransformPosition(Point);
+            bool bIsOnNegativeSourceSide = true;
+            for (const int32 Axis : Axes)
+            {
+                if (GetWorldAxisValue(WorldPoint, Axis) > KINDA_SMALL_NUMBER)
+                {
+                    bIsOnNegativeSourceSide = false;
+                    break;
+                }
+            }
+
+            if (bIsOnNegativeSourceSide)
+            {
+                SourceSidePoints.Add(Point);
+            }
+        }
+
+        if (SourceSidePoints.Num() < 1)
+        {
+            OutMessage = TEXT("No marker points are on the negative world side for the selected symmetry axes. Move/source points to negative world X/Y/Z, then apply symmetry.");
+            return false;
+        }
+
+        OutSymmetricPoints = SourceSidePoints;
         auto AddUniquePoint = [&OutSymmetricPoints](const FVector& Candidate)
         {
             constexpr float DuplicateToleranceSquared = 0.01f;
@@ -1074,7 +1108,7 @@ private:
             OutSymmetricPoints.Add(Candidate);
         };
 
-        for (const FVector& Point : SourcePoints)
+        for (const FVector& Point : SourceSidePoints)
         {
             const FVector WorldPoint = BodyToWorld.TransformPosition(Point);
             for (int32 Mask = 1; Mask < (1 << Axes.Num()); ++Mask)
@@ -1090,13 +1124,13 @@ private:
                     switch (Axes[AxisIndex])
                     {
                     case 0:
-                        MirroredWorldPoint.X = 2.f * WorldCenter.X - MirroredWorldPoint.X;
+                        MirroredWorldPoint.X = -MirroredWorldPoint.X;
                         break;
                     case 1:
-                        MirroredWorldPoint.Y = 2.f * WorldCenter.Y - MirroredWorldPoint.Y;
+                        MirroredWorldPoint.Y = -MirroredWorldPoint.Y;
                         break;
                     case 2:
-                        MirroredWorldPoint.Z = 2.f * WorldCenter.Z - MirroredWorldPoint.Z;
+                        MirroredWorldPoint.Z = -MirroredWorldPoint.Z;
                         break;
                     default:
                         break;
@@ -1109,11 +1143,11 @@ private:
         if (MaxPointCount != INDEX_NONE && OutSymmetricPoints.Num() > MaxPointCount)
         {
             OutSymmetricPoints.SetNum(MaxPointCount, EAllowShrinking::No);
-            OutMessage = FString::Printf(TEXT("Built symmetric point cloud on world axes and cleaned surplus marker points: %d -> %d point(s)."), SourcePoints.Num(), OutSymmetricPoints.Num());
+            OutMessage = FString::Printf(TEXT("Built one-way symmetric point cloud from negative to positive world axes and cleaned surplus marker points: %d source-side / %d total point(s)."), SourceSidePoints.Num(), OutSymmetricPoints.Num());
         }
         else
         {
-            OutMessage = FString::Printf(TEXT("Built symmetric point cloud on world axes: %d -> %d point(s)."), SourcePoints.Num(), OutSymmetricPoints.Num());
+            OutMessage = FString::Printf(TEXT("Built one-way symmetric point cloud from negative to positive world axes: %d source-side / %d total point(s)."), SourceSidePoints.Num(), OutSymmetricPoints.Num());
         }
         return true;
     }
