@@ -1,5 +1,6 @@
 #include "VehiclePhATToolsModule.h"
 
+#include "Engine/SkeletalMesh.h"
 #include "Framework/Application/SlateApplication.h"
 #include "PhysicsEngine/AggregateGeom.h"
 #include "PhysicsEngine/PhysicsAsset.h"
@@ -50,6 +51,35 @@ static void ShowModalWindow(const FText& Title, const TSharedRef<SWidget>& Conte
 static FName TextToName(const FText& Text)
 {
     return FName(*Text.ToString().TrimStartAndEnd());
+}
+
+static bool GetReferenceSkeletonComponentTransform(const UPhysicsAsset* PhysicsAsset, const FName BoneName, FTransform& OutTransform)
+{
+    if (!PhysicsAsset || !PhysicsAsset->PreviewSkeletalMesh.Get())
+    {
+        return false;
+    }
+
+    const FReferenceSkeleton& ReferenceSkeleton = PhysicsAsset->PreviewSkeletalMesh.Get()->GetRefSkeleton();
+    const int32 BoneIndex = ReferenceSkeleton.FindBoneIndex(BoneName);
+    if (BoneIndex == INDEX_NONE)
+    {
+        return false;
+    }
+
+    TArray<FTransform> ComponentSpaceTransforms;
+    ComponentSpaceTransforms.SetNum(ReferenceSkeleton.GetNum());
+    for (int32 Index = 0; Index < ReferenceSkeleton.GetNum(); ++Index)
+    {
+        const int32 ParentIndex = ReferenceSkeleton.GetParentIndex(Index);
+        const FTransform& LocalTransform = ReferenceSkeleton.GetRefBonePose()[Index];
+        ComponentSpaceTransforms[Index] = ParentIndex == INDEX_NONE
+            ? LocalTransform
+            : LocalTransform * ComponentSpaceTransforms[ParentIndex];
+    }
+
+    OutTransform = ComponentSpaceTransforms[BoneIndex];
+    return true;
 }
 
 static FText ConstraintPresetToText(EVehiclePhATConstraintPreset Preset)
@@ -962,10 +992,13 @@ private:
             SourcePoints = FVehiclePhATNativeConvexTool::GetPoints();
         }
 
+        FTransform BodyToWorld = FTransform::Identity;
+        const bool bHasWorldReferenceTransform = VehiclePhATToolsUI::GetReferenceSkeletonComponentTransform(PhysicsAsset, BoneName, BodyToWorld);
+
         TArray<FVector> SymmetricPoints;
         FString SymmetryMessage;
         const int32 MaxSymmetryPointCount = bCleanupToExistingSymmetryCount ? SymmetryTargetPointCount : INDEX_NONE;
-        if (!BuildSymmetricPoints(SourcePoints, SymmetricPoints, SymmetryMessage, MaxSymmetryPointCount))
+        if (!BuildSymmetricPoints(SourcePoints, SymmetricPoints, SymmetryMessage, BodyToWorld, MaxSymmetryPointCount))
         {
             OutMessage = SymmetryMessage;
             return false;
@@ -982,7 +1015,7 @@ private:
 
         FString ReplaceMessage;
         const bool bReplaced = FVehiclePhATConvexUtils::ReplaceConvexFromPoints(PhysicsAsset, BodySetup, ConvexIndex, SymmetricPoints, ReplaceMessage);
-        OutMessage = FString::Printf(TEXT("Symmetry %s for selected convex %d on '%s' using axes %s%s%s: %d -> %d point(s). %s"),
+        OutMessage = FString::Printf(TEXT("Symmetry %s for selected convex %d on '%s' using WORLD axes %s%s%s: %d -> %d point(s). %s%s"),
             bReplaced ? TEXT("enabled/applied") : TEXT("failed"),
             ConvexIndex,
             *BoneName.ToString(),
@@ -991,11 +1024,12 @@ private:
             bSymmetryZ ? TEXT("Z") : TEXT(""),
             SourcePoints.Num(),
             SymmetricPoints.Num(),
-            *ReplaceMessage);
+            *ReplaceMessage,
+            bHasWorldReferenceTransform ? TEXT("") : TEXT(" Preview Skeletal Mesh reference transform was unavailable; used identity transform."));
         return bReplaced;
     }
 
-    bool BuildSymmetricPoints(const TArray<FVector>& SourcePoints, TArray<FVector>& OutSymmetricPoints, FString& OutMessage, int32 MaxPointCount = INDEX_NONE) const
+    bool BuildSymmetricPoints(const TArray<FVector>& SourcePoints, TArray<FVector>& OutSymmetricPoints, FString& OutMessage, const FTransform& BodyToWorld, int32 MaxPointCount = INDEX_NONE) const
     {
         if (!bSymmetryX && !bSymmetryY && !bSymmetryZ)
         {
@@ -1009,13 +1043,13 @@ private:
             return false;
         }
 
-        FBox Bounds(ForceInit);
+        FBox WorldBounds(ForceInit);
         for (const FVector& Point : SourcePoints)
         {
-            Bounds += Point;
+            WorldBounds += BodyToWorld.TransformPosition(Point);
         }
 
-        const FVector Center = Bounds.GetCenter();
+        const FVector WorldCenter = WorldBounds.GetCenter();
         TArray<int32> Axes;
         if (bSymmetryX) { Axes.Add(0); }
         if (bSymmetryY) { Axes.Add(1); }
@@ -1037,9 +1071,10 @@ private:
 
         for (const FVector& Point : SourcePoints)
         {
+            const FVector WorldPoint = BodyToWorld.TransformPosition(Point);
             for (int32 Mask = 1; Mask < (1 << Axes.Num()); ++Mask)
             {
-                FVector MirroredPoint = Point;
+                FVector MirroredWorldPoint = WorldPoint;
                 for (int32 AxisIndex = 0; AxisIndex < Axes.Num(); ++AxisIndex)
                 {
                     if ((Mask & (1 << AxisIndex)) == 0)
@@ -1050,30 +1085,30 @@ private:
                     switch (Axes[AxisIndex])
                     {
                     case 0:
-                        MirroredPoint.X = 2.f * Center.X - MirroredPoint.X;
+                        MirroredWorldPoint.X = 2.f * WorldCenter.X - MirroredWorldPoint.X;
                         break;
                     case 1:
-                        MirroredPoint.Y = 2.f * Center.Y - MirroredPoint.Y;
+                        MirroredWorldPoint.Y = 2.f * WorldCenter.Y - MirroredWorldPoint.Y;
                         break;
                     case 2:
-                        MirroredPoint.Z = 2.f * Center.Z - MirroredPoint.Z;
+                        MirroredWorldPoint.Z = 2.f * WorldCenter.Z - MirroredWorldPoint.Z;
                         break;
                     default:
                         break;
                     }
                 }
-                AddUniquePoint(MirroredPoint);
+                AddUniquePoint(BodyToWorld.InverseTransformPosition(MirroredWorldPoint));
             }
         }
 
         if (MaxPointCount != INDEX_NONE && OutSymmetricPoints.Num() > MaxPointCount)
         {
             OutSymmetricPoints.SetNum(MaxPointCount, EAllowShrinking::No);
-            OutMessage = FString::Printf(TEXT("Built symmetric point cloud and cleaned surplus marker points: %d -> %d point(s)."), SourcePoints.Num(), OutSymmetricPoints.Num());
+            OutMessage = FString::Printf(TEXT("Built symmetric point cloud on world axes and cleaned surplus marker points: %d -> %d point(s)."), SourcePoints.Num(), OutSymmetricPoints.Num());
         }
         else
         {
-            OutMessage = FString::Printf(TEXT("Built symmetric point cloud: %d -> %d point(s)."), SourcePoints.Num(), OutSymmetricPoints.Num());
+            OutMessage = FString::Printf(TEXT("Built symmetric point cloud on world axes: %d -> %d point(s)."), SourcePoints.Num(), OutSymmetricPoints.Num());
         }
         return true;
     }
