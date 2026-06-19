@@ -379,7 +379,18 @@ bool FVehiclePhATNativeConvexTool::AddViewportVertexMarker(FString& OutMessage)
         NewPoint = FVector(Bounds.Max.X + FMath::Max(10.f, Extent.X * 0.35f), Center.Y, Center.Z);
     }
 
-    SelectedIndex = Points.Add(NewPoint);
+    const int32 PreviousSelectedIndex = Points.IsValidIndex(SelectedIndex) ? SelectedIndex : INDEX_NONE;
+    if (PreviousSelectedIndex != INDEX_NONE)
+    {
+        const FVector PreviousSelectedPoint = Points[PreviousSelectedIndex];
+        Points[PreviousSelectedIndex] = NewPoint;
+        Points.Add(PreviousSelectedPoint);
+        SelectedIndex = PreviousSelectedIndex;
+    }
+    else
+    {
+        SelectedIndex = Points.Add(NewPoint);
+    }
     HoverIndex = SelectedIndex;
 
     FString MarkerMessage;
@@ -392,7 +403,7 @@ bool FVehiclePhATNativeConvexTool::AddViewportVertexMarker(FString& OutMessage)
     LastLiveUpdatePoints.Reset();
     FString UpdateMessage;
     LiveUpdateConvexFromViewportVertexMarkers(UpdateMessage);
-    OutMessage = FString::Printf(TEXT("Added marker vertex %d at %.3f %.3f %.3f. It is the active/larger marker; move it with the PhAT transform gizmo."), SelectedIndex, NewPoint.X, NewPoint.Y, NewPoint.Z);
+    OutMessage = FString::Printf(TEXT("Added marker vertex %d at %.3f %.3f %.3f. If a marker was selected, its PhAT primitive slot was reused so the transform gizmo stays on the new marker."), SelectedIndex, NewPoint.X, NewPoint.Y, NewPoint.Z);
     return true;
 }
 
