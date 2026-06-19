@@ -138,6 +138,8 @@ Use **Add Marker Vertex** to append a new marker sphere outside the current poin
 
 The coordinate table labels every point as `Index: X Y Z` (for example, `3: 12.5 0.0 40.0`) so marker spheres can be identified and adjusted numerically. The parser still accepts the old `X Y Z` format, so the numeric label can be left in place or omitted when editing.
 
+Viewport marker spheres are named `VPhAT_Marker_00`, `VPhAT_Marker_01`, and so on, and their radii are slightly varied by index while the active marker is drawn larger. This gives the native PhAT viewport/hierarchy a visible marker identity that matches the coordinate table indices.
+
 ## Skeletal mesh vertex snapping scaffold
 
 `FVehiclePhATNativeConvexTool` can now snap candidate convex points to the nearest vertex in the preview Skeletal Mesh render data. The native PhAT viewport bridge should call `AddPointSnappedToMesh` / `MoveHoveredPointSnappedToMesh` after converting the viewport hit location into PhysicsAsset local space.
