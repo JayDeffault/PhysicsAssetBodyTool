@@ -308,7 +308,7 @@ bool FVehiclePhATNativeConvexTool::RebuildViewportVertexMarkers(float MarkerRadi
             ++MarkerAllocatedCount;
         }
 
-        Marker->Center = Point;
+        Marker->Center = Points[PointIndex];
         Marker->Radius = PointIndex == SelectedIndex ? SafeRadius * 1.75f : SafeRadius;
     }
 
