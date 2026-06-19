@@ -407,6 +407,8 @@ public:
                 [SNew(SButton).Text(LOCTEXT("ApplyConvex", "Apply Convex")).OnClicked(this, &SConvexCreationDialog::OnApply)]
                 + SUniformGridPanel::Slot(3, 0)
                 [SNew(SButton).Text(LOCTEXT("ClearCreateConvexMarkers", "Clear Viewport Markers")).OnClicked(this, &SConvexCreationDialog::OnClearMarkers)]
+                + SUniformGridPanel::Slot(4, 0)
+                [SNew(SButton).Text(LOCTEXT("AddCreateConvexMarker", "Add Marker Vertex")).OnClicked(this, &SConvexCreationDialog::OnAddMarker)]
             ]
         ];
     }
@@ -497,6 +499,18 @@ private:
     {
         FString Message;
         FVehiclePhATNativeConvexTool::RemoveViewportVertexMarkers(Message);
+        Status = Message;
+        return FReply::Handled();
+    }
+
+    FReply OnAddMarker()
+    {
+        FString Message;
+        if (FVehiclePhATNativeConvexTool::AddViewportVertexMarker(Message))
+        {
+            SetPointsTextFromPoints(FVehiclePhATNativeConvexTool::GetPoints());
+            SyncTextBox();
+        }
         Status = Message;
         return FReply::Handled();
     }
@@ -666,6 +680,8 @@ public:
                 [SNew(SButton).Text(LOCTEXT("ReplaceConvex", "Rebuild / Replace")).OnClicked(this, &SConvexEditDialog::OnReplace)]
                 + SUniformGridPanel::Slot(3, 0)
                 [SNew(SButton).Text(LOCTEXT("ClearConvexMarkers", "Clear Viewport Markers")).OnClicked(this, &SConvexEditDialog::OnClearMarkers)]
+                + SUniformGridPanel::Slot(4, 0)
+                [SNew(SButton).Text(LOCTEXT("AddConvexMarker", "Add Marker Vertex")).OnClicked(this, &SConvexEditDialog::OnAddMarker)]
             ]
         ];
     }
@@ -755,6 +771,19 @@ private:
     {
         FString Message;
         FVehiclePhATNativeConvexTool::RemoveViewportVertexMarkers(Message);
+        Status = Message;
+        return FReply::Handled();
+    }
+
+    FReply OnAddMarker()
+    {
+        FString Message;
+        if (FVehiclePhATNativeConvexTool::AddViewportVertexMarker(Message))
+        {
+            ConvexIndex = FMath::Max(0, FVehiclePhATNativeConvexTool::GetConvexIndex());
+            SetPointsTextFromPoints(FVehiclePhATNativeConvexTool::GetPoints());
+            SyncTextBox();
+        }
         Status = Message;
         return FReply::Handled();
     }

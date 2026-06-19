@@ -65,6 +65,7 @@ public:
     static bool MoveSelectedPoint(const FVector& NewPosition, bool bSnapToMesh, float MaxSnapDistance);
     static bool ApplySelectedPointDelta(const FVector& Delta, bool bSnapToMesh, float MaxSnapDistance);
     static bool RebuildViewportVertexMarkers(float MarkerRadius, FString& OutMessage);
+    static bool AddViewportVertexMarker(FString& OutMessage);
     static bool PullPointsFromViewportVertexMarkers(FString& OutMessage);
     static bool RemoveViewportVertexMarkers(FString& OutMessage);
     static bool LiveUpdateConvexFromViewportVertexMarkers(FString& OutMessage);

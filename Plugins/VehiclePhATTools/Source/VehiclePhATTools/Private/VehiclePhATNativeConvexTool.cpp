@@ -309,7 +309,7 @@ bool FVehiclePhATNativeConvexTool::RebuildViewportVertexMarkers(float MarkerRadi
         }
 
         Marker->Center = Point;
-        Marker->Radius = SafeRadius;
+        Marker->Radius = PointIndex == SelectedIndex ? SafeRadius * 1.75f : SafeRadius;
     }
 
     for (int32 MarkerOffset = Points.Num(); MarkerOffset < MarkerAllocatedCount; ++MarkerOffset)
@@ -325,6 +325,45 @@ bool FVehiclePhATNativeConvexTool::RebuildViewportVertexMarkers(float MarkerRadi
     bPendingDebouncedUpdate = false;
     FVehiclePhATBodyUtils::MarkAssetChanged(ActivePhysicsAsset);
     OutMessage = FString::Printf(TEXT("Created %d native PhAT viewport vertex marker sphere(s). Move these markers with the standard PhAT transform gizmo, then Apply Convex."), MarkerCount);
+    return true;
+}
+
+bool FVehiclePhATNativeConvexTool::AddViewportVertexMarker(FString& OutMessage)
+{
+    using namespace VehiclePhATNativeConvexToolState;
+    if (!IsActive())
+    {
+        OutMessage = TEXT("Native convex tool is inactive.");
+        return false;
+    }
+
+    FString PullMessage;
+    PullPointsFromViewportVertexMarkers(PullMessage);
+
+    FVector NewPoint = FVector::ZeroVector;
+    if (Points.IsValidIndex(SelectedIndex))
+    {
+        NewPoint = Points[SelectedIndex] + FVector(10.f, 0.f, 0.f);
+    }
+    else if (Points.Num() > 0)
+    {
+        NewPoint = Points.Last() + FVector(10.f, 0.f, 0.f);
+    }
+
+    SelectedIndex = Points.Add(NewPoint);
+    HoverIndex = SelectedIndex;
+
+    FString MarkerMessage;
+    if (!RebuildViewportVertexMarkers(2.5f, MarkerMessage))
+    {
+        OutMessage = MarkerMessage;
+        return false;
+    }
+
+    LastLiveUpdatePoints.Reset();
+    FString UpdateMessage;
+    LiveUpdateConvexFromViewportVertexMarkers(UpdateMessage);
+    OutMessage = FString::Printf(TEXT("Added marker vertex %d at %.3f %.3f %.3f. It is the active/larger marker; move it with the PhAT transform gizmo."), SelectedIndex, NewPoint.X, NewPoint.Y, NewPoint.Z);
     return true;
 }
 
