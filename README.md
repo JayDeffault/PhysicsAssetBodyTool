@@ -142,6 +142,8 @@ After editing coordinates in the table, click **Apply Table Coordinates** to pus
 
 Viewport marker spheres are named `VPhAT_Marker_00`, `VPhAT_Marker_01`, and so on, and their radii are slightly varied by index while the active marker is drawn larger. This gives the native PhAT viewport/hierarchy a visible marker identity that matches the coordinate table indices.
 
+Marker viewport render data is exported in red (`FLinearColor::Red`) for both marker points and marker connection segments, so any native PhAT viewport draw hook consuming `BuildViewportRenderData` will render the marker overlay in red.
+
 ## Skeletal mesh vertex snapping scaffold
 
 `FVehiclePhATNativeConvexTool` can now snap candidate convex points to the nearest vertex in the preview Skeletal Mesh render data. The native PhAT viewport bridge should call `AddPointSnappedToMesh` / `MoveHoveredPointSnappedToMesh` after converting the viewport hit location into PhysicsAsset local space.

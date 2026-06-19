@@ -896,7 +896,7 @@ void FVehiclePhATNativeConvexTool::BuildViewportRenderData(TArray<FViewportPoint
         FViewportPoint& ViewportPoint = OutPoints.AddDefaulted_GetRef();
         ViewportPoint.Position = Points[PointIndex];
         ViewportPoint.bHovered = bHovered || bSelected;
-        ViewportPoint.Color = bHovered ? FLinearColor::Yellow : (bSelected ? FLinearColor(1.f, 0.55f, 0.f, 1.f) : FLinearColor(0.1f, 0.65f, 1.f, 1.f));
+        ViewportPoint.Color = FLinearColor::Red;
         ViewportPoint.Size = (bHovered || bSelected) ? 14.f : 9.f;
     }
 
@@ -916,7 +916,7 @@ void FVehiclePhATNativeConvexTool::BuildViewportRenderData(TArray<FViewportPoint
         FViewportSegment& Segment = OutSegments.AddDefaulted_GetRef();
         Segment.Start = Points[PointIndex];
         Segment.End = Points[NextPointIndex];
-        Segment.Color = FLinearColor(0.1f, 0.65f, 1.f, 1.f);
+        Segment.Color = FLinearColor::Red;
     }
 }
 
