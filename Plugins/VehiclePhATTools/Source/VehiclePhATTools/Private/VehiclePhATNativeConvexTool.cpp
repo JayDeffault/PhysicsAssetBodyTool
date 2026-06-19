@@ -933,6 +933,11 @@ bool FVehiclePhATNativeConvexTool::Apply(FString& OutMessage)
     if (Mode == EMode::Create)
     {
         const bool bApplied = FVehiclePhATConvexUtils::AddConvexFromPoints(PhysicsAsset.Get(), BodySetup, Points, OutMessage);
+        if (bApplied)
+        {
+            ConvexIndex = BodySetup->AggGeom.ConvexElems.Num() - 1;
+            Mode = EMode::Edit;
+        }
         bLiveCreatedConvex = false;
         return bApplied;
     }

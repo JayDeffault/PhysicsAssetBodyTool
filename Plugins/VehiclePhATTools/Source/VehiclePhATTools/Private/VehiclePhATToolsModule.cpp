@@ -409,6 +409,8 @@ public:
                 [SNew(SButton).Text(LOCTEXT("ClearCreateConvexMarkers", "Clear Viewport Markers")).OnClicked(this, &SConvexCreationDialog::OnClearMarkers)]
                 + SUniformGridPanel::Slot(4, 0)
                 [SNew(SButton).Text(LOCTEXT("AddCreateConvexMarker", "Add Marker Vertex")).OnClicked(this, &SConvexCreationDialog::OnAddMarker)]
+                + SUniformGridPanel::Slot(5, 0)
+                [SNew(SButton).Text(LOCTEXT("ApplyCreateConvexTable", "Apply Table Coordinates")).OnClicked(this, &SConvexCreationDialog::OnApplyTableCoordinates)]
             ]
         ];
     }
@@ -519,6 +521,25 @@ private:
             SyncTextBox();
         }
         Status = Message;
+        return FReply::Handled();
+    }
+
+    FReply OnApplyTableCoordinates()
+    {
+        const TArray<FVector> Points = ParsePointsFromText();
+        SetPointsTextFromPoints(Points);
+        SyncTextBox();
+        RebuildNativeViewportMarkers(Points);
+
+        FString Message;
+        if (FVehiclePhATNativeConvexTool::Apply(Message))
+        {
+            Status = Message;
+        }
+        else
+        {
+            Status = FString::Printf(TEXT("Applied %d table coordinate(s) to marker spheres. %s"), Points.Num(), *Message);
+        }
         return FReply::Handled();
     }
 
@@ -700,6 +721,8 @@ public:
                 [SNew(SButton).Text(LOCTEXT("ClearConvexMarkers", "Clear Viewport Markers")).OnClicked(this, &SConvexEditDialog::OnClearMarkers)]
                 + SUniformGridPanel::Slot(4, 0)
                 [SNew(SButton).Text(LOCTEXT("AddConvexMarker", "Add Marker Vertex")).OnClicked(this, &SConvexEditDialog::OnAddMarker)]
+                + SUniformGridPanel::Slot(5, 0)
+                [SNew(SButton).Text(LOCTEXT("ApplyEditConvexTable", "Apply Table Coordinates")).OnClicked(this, &SConvexEditDialog::OnApplyTableCoordinates)]
             ]
         ];
     }
@@ -810,6 +833,26 @@ private:
             SyncTextBox();
         }
         Status = Message;
+        return FReply::Handled();
+    }
+
+    FReply OnApplyTableCoordinates()
+    {
+        const TArray<FVector> Points = ParsePointsFromText();
+        SetPointsTextFromPoints(Points);
+        SyncTextBox();
+        RebuildNativeViewportMarkers(Points);
+
+        FString Message;
+        if (FVehiclePhATNativeConvexTool::Apply(Message))
+        {
+            ConvexIndex = FMath::Max(0, FVehiclePhATNativeConvexTool::GetConvexIndex());
+            Status = Message;
+        }
+        else
+        {
+            Status = FString::Printf(TEXT("Applied %d table coordinate(s) to marker spheres. %s"), Points.Num(), *Message);
+        }
         return FReply::Handled();
     }
 

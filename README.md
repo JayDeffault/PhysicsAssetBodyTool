@@ -138,6 +138,8 @@ Use **Add Marker Vertex** to append a new marker sphere outside the current poin
 
 The coordinate table labels every point as `Index: X Y Z` (for example, `3: 12.5 0.0 40.0`) so marker spheres can be identified and adjusted numerically. The parser still accepts the old `X Y Z` format, so the numeric label can be left in place or omitted when editing.
 
+After editing coordinates in the table, click **Apply Table Coordinates** to push the table values back to viewport marker spheres and rebuild/apply the active convex from those numeric coordinates.
+
 Viewport marker spheres are named `VPhAT_Marker_00`, `VPhAT_Marker_01`, and so on, and their radii are slightly varied by index while the active marker is drawn larger. This gives the native PhAT viewport/hierarchy a visible marker identity that matches the coordinate table indices.
 
 ## Skeletal mesh vertex snapping scaffold
