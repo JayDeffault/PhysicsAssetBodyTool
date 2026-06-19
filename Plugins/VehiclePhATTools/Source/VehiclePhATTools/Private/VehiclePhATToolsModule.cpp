@@ -962,10 +962,15 @@ private:
 
     FReply OnApplySymmetryNow()
     {
+        const bool bReuseExistingSymmetryCount = bSymmetryEnabled && SymmetryTargetPointCount != INDEX_NONE;
         bSymmetryEnabled = true;
-        SymmetryTargetPointCount = INDEX_NONE;
+        if (!bReuseExistingSymmetryCount)
+        {
+            SymmetryTargetPointCount = INDEX_NONE;
+        }
+
         FString Message;
-        ApplySymmetryToSelectedConvex(Message, false);
+        ApplySymmetryToSelectedConvex(Message, bReuseExistingSymmetryCount);
         Status = Message;
         return FReply::Handled();
     }
