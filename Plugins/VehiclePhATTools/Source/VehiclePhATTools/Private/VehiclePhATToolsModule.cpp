@@ -935,6 +935,15 @@ private:
             ConvexIndex = FMath::Max(0, FVehiclePhATNativeConvexTool::GetConvexIndex());
             SetPointsTextFromPoints(FVehiclePhATNativeConvexTool::GetPoints());
             SyncTextBox();
+
+            if (bSymmetryEnabled)
+            {
+                SymmetryTargetPointCount = INDEX_NONE;
+                FString SymmetryMessage;
+                ApplySymmetryToSelectedConvex(SymmetryMessage, false);
+                Status = Message + TEXT("\n") + SymmetryMessage;
+                return FReply::Handled();
+            }
         }
         Status = Message;
         return FReply::Handled();
@@ -962,15 +971,13 @@ private:
 
     FReply OnApplySymmetryNow()
     {
-        const bool bReuseExistingSymmetryCount = bSymmetryEnabled && SymmetryTargetPointCount != INDEX_NONE;
-        bSymmetryEnabled = true;
-        if (!bReuseExistingSymmetryCount)
-        {
-            SymmetryTargetPointCount = INDEX_NONE;
-        }
+        // One-shot apply must not toggle the live Enable checkbox.
+        // It always rebuilds from the current negative-side source markers so repeated clicks
+        // clean/rebuild and newly added negative-side markers get mirrored immediately.
+        SymmetryTargetPointCount = INDEX_NONE;
 
         FString Message;
-        ApplySymmetryToSelectedConvex(Message, bReuseExistingSymmetryCount);
+        ApplySymmetryToSelectedConvex(Message, false);
         Status = Message;
         return FReply::Handled();
     }
