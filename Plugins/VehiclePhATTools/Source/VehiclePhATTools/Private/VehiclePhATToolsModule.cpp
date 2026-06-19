@@ -774,6 +774,7 @@ private:
     bool bSymmetryX = true;
     bool bSymmetryY = false;
     bool bSymmetryZ = false;
+    int32 SymmetryTargetPointCount = INDEX_NONE;
     TSharedPtr<SMultiLineEditableTextBox> PointsTextBox;
 
     FText GetBoneText() const { return FText::FromName(BoneName); }
@@ -790,12 +791,14 @@ private:
         bSymmetryEnabled = State == ECheckBoxState::Checked;
         if (bSymmetryEnabled)
         {
+            SymmetryTargetPointCount = INDEX_NONE;
             FString Message;
-            ApplySymmetryToSelectedConvex(Message);
+            ApplySymmetryToSelectedConvex(Message, false);
             Status = Message;
         }
         else
         {
+            SymmetryTargetPointCount = INDEX_NONE;
             Status = TEXT("Symmetry disabled. Marker moves will update only the selected convex points without mirroring.");
         }
     }
@@ -814,7 +817,7 @@ private:
                 if (bSymmetryEnabled)
                 {
                     FString SymmetryMessage;
-                    ApplySymmetryToSelectedConvex(SymmetryMessage);
+                    ApplySymmetryToSelectedConvex(SymmetryMessage, true);
                     Status = Message + TEXT("\n") + SymmetryMessage;
                 }
                 else
@@ -930,13 +933,14 @@ private:
     FReply OnApplySymmetryNow()
     {
         bSymmetryEnabled = true;
+        SymmetryTargetPointCount = INDEX_NONE;
         FString Message;
-        ApplySymmetryToSelectedConvex(Message);
+        ApplySymmetryToSelectedConvex(Message, false);
         Status = Message;
         return FReply::Handled();
     }
 
-    bool ApplySymmetryToSelectedConvex(FString& OutMessage)
+    bool ApplySymmetryToSelectedConvex(FString& OutMessage, bool bCleanupToExistingSymmetryCount)
     {
         USkeletalBodySetup* BodySetup = FVehiclePhATBodyUtils::FindBodySetup(PhysicsAsset, BoneName);
         if (!BodySetup)
@@ -960,10 +964,16 @@ private:
 
         TArray<FVector> SymmetricPoints;
         FString SymmetryMessage;
-        if (!BuildSymmetricPoints(SourcePoints, SymmetricPoints, SymmetryMessage))
+        const int32 MaxSymmetryPointCount = bCleanupToExistingSymmetryCount ? SymmetryTargetPointCount : INDEX_NONE;
+        if (!BuildSymmetricPoints(SourcePoints, SymmetricPoints, SymmetryMessage, MaxSymmetryPointCount))
         {
             OutMessage = SymmetryMessage;
             return false;
+        }
+
+        if (SymmetryTargetPointCount == INDEX_NONE || !bCleanupToExistingSymmetryCount)
+        {
+            SymmetryTargetPointCount = SymmetricPoints.Num();
         }
 
         SetPointsTextFromPoints(SymmetricPoints);
@@ -985,7 +995,7 @@ private:
         return bReplaced;
     }
 
-    bool BuildSymmetricPoints(const TArray<FVector>& SourcePoints, TArray<FVector>& OutSymmetricPoints, FString& OutMessage) const
+    bool BuildSymmetricPoints(const TArray<FVector>& SourcePoints, TArray<FVector>& OutSymmetricPoints, FString& OutMessage, int32 MaxPointCount = INDEX_NONE) const
     {
         if (!bSymmetryX && !bSymmetryY && !bSymmetryZ)
         {
@@ -1056,7 +1066,15 @@ private:
             }
         }
 
-        OutMessage = FString::Printf(TEXT("Built symmetric point cloud: %d -> %d point(s)."), SourcePoints.Num(), OutSymmetricPoints.Num());
+        if (MaxPointCount != INDEX_NONE && OutSymmetricPoints.Num() > MaxPointCount)
+        {
+            OutSymmetricPoints.SetNum(MaxPointCount, EAllowShrinking::No);
+            OutMessage = FString::Printf(TEXT("Built symmetric point cloud and cleaned surplus marker points: %d -> %d point(s)."), SourcePoints.Num(), OutSymmetricPoints.Num());
+        }
+        else
+        {
+            OutMessage = FString::Printf(TEXT("Built symmetric point cloud: %d -> %d point(s)."), SourcePoints.Num(), OutSymmetricPoints.Num());
+        }
         return true;
     }
 
