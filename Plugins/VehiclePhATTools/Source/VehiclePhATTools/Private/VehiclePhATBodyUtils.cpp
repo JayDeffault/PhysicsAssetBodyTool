@@ -256,19 +256,21 @@ bool FVehiclePhATBodyUtils::CopyBodyShapeSettings(const USkeletalBodySetup* Sour
         return false;
     }
 
-    if (Policy == EVehiclePhATShapeMismatchPolicy::ReplaceShapes || bSameShapeCount)
+    if (Policy == EVehiclePhATShapeMismatchPolicy::ReplaceShapes)
     {
         TargetBody->AggGeom = SourceBody->AggGeom;
         OutMessage = TEXT("Shapes replaced/copied.");
         return true;
     }
 
+    int32 AppliedShapeCount = 0;
     const int32 CommonBoxes = FMath::Min(SourceBody->AggGeom.BoxElems.Num(), TargetBody->AggGeom.BoxElems.Num());
     for (int32 Index = 0; Index < CommonBoxes; ++Index)
     {
         const FTransform ExistingTransform = TargetBody->AggGeom.BoxElems[Index].GetTransform();
         TargetBody->AggGeom.BoxElems[Index] = SourceBody->AggGeom.BoxElems[Index];
         TargetBody->AggGeom.BoxElems[Index].SetTransform(ExistingTransform);
+        ++AppliedShapeCount;
     }
 
     const int32 CommonSpheres = FMath::Min(SourceBody->AggGeom.SphereElems.Num(), TargetBody->AggGeom.SphereElems.Num());
@@ -277,6 +279,7 @@ bool FVehiclePhATBodyUtils::CopyBodyShapeSettings(const USkeletalBodySetup* Sour
         const FVector ExistingCenter = TargetBody->AggGeom.SphereElems[Index].Center;
         TargetBody->AggGeom.SphereElems[Index] = SourceBody->AggGeom.SphereElems[Index];
         TargetBody->AggGeom.SphereElems[Index].Center = ExistingCenter;
+        ++AppliedShapeCount;
     }
 
     const int32 CommonCapsules = FMath::Min(SourceBody->AggGeom.SphylElems.Num(), TargetBody->AggGeom.SphylElems.Num());
@@ -285,10 +288,30 @@ bool FVehiclePhATBodyUtils::CopyBodyShapeSettings(const USkeletalBodySetup* Sour
         const FTransform ExistingTransform = TargetBody->AggGeom.SphylElems[Index].GetTransform();
         TargetBody->AggGeom.SphylElems[Index] = SourceBody->AggGeom.SphylElems[Index];
         TargetBody->AggGeom.SphylElems[Index].SetTransform(ExistingTransform);
+        ++AppliedShapeCount;
     }
 
-    OutMessage = TEXT("Common primitive shape settings applied.");
-    return true;
+    const int32 CommonTaperedCapsules = FMath::Min(SourceBody->AggGeom.TaperedCapsuleElems.Num(), TargetBody->AggGeom.TaperedCapsuleElems.Num());
+    for (int32 Index = 0; Index < CommonTaperedCapsules; ++Index)
+    {
+        const FTransform ExistingTransform = TargetBody->AggGeom.TaperedCapsuleElems[Index].GetTransform();
+        TargetBody->AggGeom.TaperedCapsuleElems[Index] = SourceBody->AggGeom.TaperedCapsuleElems[Index];
+        TargetBody->AggGeom.TaperedCapsuleElems[Index].SetTransform(ExistingTransform);
+        ++AppliedShapeCount;
+    }
+
+    const int32 CommonConvex = FMath::Min(SourceBody->AggGeom.ConvexElems.Num(), TargetBody->AggGeom.ConvexElems.Num());
+    for (int32 Index = 0; Index < CommonConvex; ++Index)
+    {
+        const FTransform ExistingTransform = TargetBody->AggGeom.ConvexElems[Index].GetTransform();
+        TargetBody->AggGeom.ConvexElems[Index] = SourceBody->AggGeom.ConvexElems[Index];
+        TargetBody->AggGeom.ConvexElems[Index].SetTransform(ExistingTransform);
+        TargetBody->AggGeom.ConvexElems[Index].UpdateElemBox();
+        ++AppliedShapeCount;
+    }
+
+    OutMessage = FString::Printf(TEXT("Common shape settings applied to %d shape(s); transforms were preserved."), AppliedShapeCount);
+    return AppliedShapeCount > 0;
 }
 
 bool FVehiclePhATBodyUtils::CopyShapeTransforms(const USkeletalBodySetup* SourceBody, USkeletalBodySetup* TargetBody, bool bLocation, bool bRotation, bool bScaleExtent, bool bAllShapes, FString& OutMessage)
@@ -347,6 +370,29 @@ bool FVehiclePhATBodyUtils::CopyShapeTransforms(const USkeletalBodySetup* Source
         {
             TargetBody->AggGeom.SphylElems[Index].Radius = SourceBody->AggGeom.SphylElems[Index].Radius;
             TargetBody->AggGeom.SphylElems[Index].Length = SourceBody->AggGeom.SphylElems[Index].Length;
+        }
+    }
+
+    const int32 TaperedCapsuleCount = bAllShapes ? FMath::Min(SourceBody->AggGeom.TaperedCapsuleElems.Num(), TargetBody->AggGeom.TaperedCapsuleElems.Num()) : FMath::Min(1, FMath::Min(SourceBody->AggGeom.TaperedCapsuleElems.Num(), TargetBody->AggGeom.TaperedCapsuleElems.Num()));
+    for (int32 Index = 0; Index < TaperedCapsuleCount; ++Index)
+    {
+        CopyTransformFields(TargetBody->AggGeom.TaperedCapsuleElems[Index], SourceBody->AggGeom.TaperedCapsuleElems[Index]);
+        if (bScaleExtent)
+        {
+            TargetBody->AggGeom.TaperedCapsuleElems[Index].Radius0 = SourceBody->AggGeom.TaperedCapsuleElems[Index].Radius0;
+            TargetBody->AggGeom.TaperedCapsuleElems[Index].Radius1 = SourceBody->AggGeom.TaperedCapsuleElems[Index].Radius1;
+            TargetBody->AggGeom.TaperedCapsuleElems[Index].Length = SourceBody->AggGeom.TaperedCapsuleElems[Index].Length;
+        }
+    }
+
+    const int32 ConvexCount = bAllShapes ? FMath::Min(SourceBody->AggGeom.ConvexElems.Num(), TargetBody->AggGeom.ConvexElems.Num()) : FMath::Min(1, FMath::Min(SourceBody->AggGeom.ConvexElems.Num(), TargetBody->AggGeom.ConvexElems.Num()));
+    for (int32 Index = 0; Index < ConvexCount; ++Index)
+    {
+        CopyTransformFields(TargetBody->AggGeom.ConvexElems[Index], SourceBody->AggGeom.ConvexElems[Index]);
+        if (bScaleExtent)
+        {
+            TargetBody->AggGeom.ConvexElems[Index].VertexData = SourceBody->AggGeom.ConvexElems[Index].VertexData;
+            TargetBody->AggGeom.ConvexElems[Index].UpdateElemBox();
         }
     }
 

@@ -1375,8 +1375,11 @@ private:
         {
             BodySetup->Modify();
             FString Message;
-            FVehiclePhATClipboard::PasteBodySettings(BodySetup, Message);
-            FVehiclePhATBodyUtils::MarkAssetChanged(PhysicsAsset);
+            const bool bPasted = FVehiclePhATClipboard::PasteBodySettings(BodySetup, Message);
+            if (bPasted)
+            {
+                FVehiclePhATBodyUtils::MarkBodySetupGeometryChanged(PhysicsAsset, BodySetup);
+            }
             Status = Message;
         }
         else
@@ -1408,8 +1411,11 @@ private:
         {
             BodySetup->Modify();
             FString Message;
-            FVehiclePhATClipboard::PasteTransform(BodySetup, true, true, false, true, Message);
-            FVehiclePhATBodyUtils::MarkAssetChanged(PhysicsAsset);
+            const bool bPasted = FVehiclePhATClipboard::PasteTransform(BodySetup, true, true, false, true, Message);
+            if (bPasted)
+            {
+                FVehiclePhATBodyUtils::MarkBodySetupGeometryChanged(PhysicsAsset, BodySetup);
+            }
             Status = Message;
         }
         else
