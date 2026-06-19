@@ -134,7 +134,7 @@ The convex dialogs also poll the marker spheres while open, but they debounce up
 
 Live-created convex elements are reused for subsequent marker moves. If the convex tool is restarted or stopped before the user explicitly applies the live-created convex, the temporary live convex is removed so stale duplicates are not left behind.
 
-Use **Add Marker Vertex** to append a new marker sphere near the current/last marker. The new marker is made the active marker and drawn larger so it is easy to find and move with the standard PhAT transform gizmo.
+Use **Add Marker Vertex** to append a new marker sphere outside the current point bounds, rather than inside the existing hull. The new marker is made the active marker and drawn larger so it is easy to find and move with the standard PhAT transform gizmo. Preview/Rebuild pulls current viewport marker positions before rebuilding markers, so moved marker positions are not overwritten by stale text coordinates.
 
 ## Skeletal mesh vertex snapping scaffold
 

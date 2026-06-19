@@ -366,13 +366,17 @@ bool FVehiclePhATNativeConvexTool::AddViewportVertexMarker(FString& OutMessage)
     PullPointsFromViewportVertexMarkers(PullMessage);
 
     FVector NewPoint = FVector::ZeroVector;
-    if (Points.IsValidIndex(SelectedIndex))
+    if (Points.Num() > 0)
     {
-        NewPoint = Points[SelectedIndex] + FVector(10.f, 0.f, 0.f);
-    }
-    else if (Points.Num() > 0)
-    {
-        NewPoint = Points.Last() + FVector(10.f, 0.f, 0.f);
+        FBox Bounds(ForceInit);
+        for (const FVector& ExistingPoint : Points)
+        {
+            Bounds += ExistingPoint;
+        }
+
+        const FVector Center = Bounds.GetCenter();
+        const FVector Extent = Bounds.GetExtent();
+        NewPoint = FVector(Bounds.Max.X + FMath::Max(10.f, Extent.X * 0.35f), Center.Y, Center.Z);
     }
 
     SelectedIndex = Points.Add(NewPoint);

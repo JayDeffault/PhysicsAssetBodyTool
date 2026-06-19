@@ -462,7 +462,14 @@ private:
 
     FReply OnPreview()
     {
-        const TArray<FVector> Points = ParsePointsFromText();
+        TArray<FVector> Points = ParsePointsFromText();
+        FString MarkerMessage;
+        if (FVehiclePhATNativeConvexTool::PullPointsFromViewportVertexMarkers(MarkerMessage))
+        {
+            Points = FVehiclePhATNativeConvexTool::GetPoints();
+            SetPointsTextFromPoints(Points);
+            SyncTextBox();
+        }
         Status = FString::Printf(TEXT("Preview: %d point(s). At least 4 non-coplanar points are required."), Points.Num());
         RebuildNativeViewportMarkers(Points);
         return FReply::Handled();
@@ -738,7 +745,14 @@ private:
 
     FReply OnPreview()
     {
-        const TArray<FVector> Points = ParsePointsFromText();
+        TArray<FVector> Points = ParsePointsFromText();
+        FString MarkerMessage;
+        if (FVehiclePhATNativeConvexTool::PullPointsFromViewportVertexMarkers(MarkerMessage))
+        {
+            Points = FVehiclePhATNativeConvexTool::GetPoints();
+            SetPointsTextFromPoints(Points);
+            SyncTextBox();
+        }
         Status = FString::Printf(TEXT("Preview edited convex %d on '%s': %d point(s)."), ConvexIndex, *BoneName.ToString(), Points.Num());
         RebuildNativeViewportMarkers(Points);
         return FReply::Handled();
