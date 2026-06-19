@@ -140,6 +140,8 @@ The coordinate table labels every point as `Index: X Y Z` (for example, `3: 12.5
 
 After editing coordinates in the table, click **Apply Table Coordinates** to push the table values back to viewport marker spheres and rebuild/apply the active convex from those numeric coordinates.
 
+To enable symmetry for **Edit Convex Bodies**: load/select the desired body and `Convex index`, choose the X/Y/Z axis checkboxes in the **Symmetry** row, then tick **Enable** or click **Apply Symmetry Now**. Symmetry affects only that selected convex index. Once enabled, moving marker spheres in the PhAT viewport triggers the normal debounced update and then rebuilds the same selected convex from the symmetric marker point cloud. Untick **Enable** to return to non-mirrored marker editing.
+
 Viewport marker spheres are named `VPhAT_Marker_00`, `VPhAT_Marker_01`, and so on, and their radii are slightly varied by index while the active marker is drawn larger. This gives the native PhAT viewport/hierarchy a visible marker identity that matches the coordinate table indices.
 
 Marker viewport render data is exported in red (`FLinearColor::Red`) for both marker points and marker connection segments, so any native PhAT viewport draw hook consuming `BuildViewportRenderData` will render the marker overlay in red.

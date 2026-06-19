@@ -723,6 +723,42 @@ public:
                 [SNew(SButton).Text(LOCTEXT("AddConvexMarker", "Add Marker Vertex")).OnClicked(this, &SConvexEditDialog::OnAddMarker)]
                 + SUniformGridPanel::Slot(5, 0)
                 [SNew(SButton).Text(LOCTEXT("ApplyEditConvexTable", "Apply Table Coordinates")).OnClicked(this, &SConvexEditDialog::OnApplyTableCoordinates)]
+                + SUniformGridPanel::Slot(0, 1)
+                [SNew(STextBlock).Text(LOCTEXT("EditConvexSymmetry", "Symmetry"))]
+                + SUniformGridPanel::Slot(1, 1)
+                [
+                    SNew(SHorizontalBox)
+                    + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+                    [SNew(SCheckBox).IsChecked(this, &SConvexEditDialog::GetSymmetryEnabledState).OnCheckStateChanged(this, &SConvexEditDialog::OnSymmetryEnabledChanged)]
+                    + SHorizontalBox::Slot().AutoWidth().Padding(3, 0, 0, 0).VAlign(VAlign_Center)
+                    [SNew(STextBlock).Text(LOCTEXT("EditConvexSymmetryEnable", "Enable"))]
+                ]
+                + SUniformGridPanel::Slot(2, 1)
+                [
+                    SNew(SHorizontalBox)
+                    + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+                    [SNew(SCheckBox).IsChecked(this, &SConvexEditDialog::GetSymmetryXState).OnCheckStateChanged(this, &SConvexEditDialog::OnSymmetryXChanged)]
+                    + SHorizontalBox::Slot().AutoWidth().Padding(3, 0, 0, 0).VAlign(VAlign_Center)
+                    [SNew(STextBlock).Text(LOCTEXT("EditConvexSymmetryX", "X"))]
+                ]
+                + SUniformGridPanel::Slot(3, 1)
+                [
+                    SNew(SHorizontalBox)
+                    + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+                    [SNew(SCheckBox).IsChecked(this, &SConvexEditDialog::GetSymmetryYState).OnCheckStateChanged(this, &SConvexEditDialog::OnSymmetryYChanged)]
+                    + SHorizontalBox::Slot().AutoWidth().Padding(3, 0, 0, 0).VAlign(VAlign_Center)
+                    [SNew(STextBlock).Text(LOCTEXT("EditConvexSymmetryY", "Y"))]
+                ]
+                + SUniformGridPanel::Slot(4, 1)
+                [
+                    SNew(SHorizontalBox)
+                    + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+                    [SNew(SCheckBox).IsChecked(this, &SConvexEditDialog::GetSymmetryZState).OnCheckStateChanged(this, &SConvexEditDialog::OnSymmetryZChanged)]
+                    + SHorizontalBox::Slot().AutoWidth().Padding(3, 0, 0, 0).VAlign(VAlign_Center)
+                    [SNew(STextBlock).Text(LOCTEXT("EditConvexSymmetryZ", "Z"))]
+                ]
+                + SUniformGridPanel::Slot(5, 1)
+                [SNew(SButton).Text(LOCTEXT("ApplyEditConvexSymmetry", "Apply Symmetry Now")).OnClicked(this, &SConvexEditDialog::OnApplySymmetryNow)]
             ]
         ];
     }
@@ -734,12 +770,38 @@ private:
     FString PointsText;
     FString Status;
     bool bLiveUpdateConvex = true;
+    bool bSymmetryEnabled = false;
+    bool bSymmetryX = true;
+    bool bSymmetryY = false;
+    bool bSymmetryZ = false;
     TSharedPtr<SMultiLineEditableTextBox> PointsTextBox;
 
     FText GetBoneText() const { return FText::FromName(BoneName); }
     TOptional<int32> GetConvexIndex() const { return ConvexIndex; }
     FText GetPointsText() const { return FText::FromString(PointsText); }
     FText GetStatusText() const { return FText::FromString(Status); }
+    ECheckBoxState GetSymmetryEnabledState() const { return bSymmetryEnabled ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; }
+    ECheckBoxState GetSymmetryXState() const { return bSymmetryX ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; }
+    ECheckBoxState GetSymmetryYState() const { return bSymmetryY ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; }
+    ECheckBoxState GetSymmetryZState() const { return bSymmetryZ ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; }
+
+    void OnSymmetryEnabledChanged(ECheckBoxState State)
+    {
+        bSymmetryEnabled = State == ECheckBoxState::Checked;
+        if (bSymmetryEnabled)
+        {
+            FString Message;
+            ApplySymmetryToSelectedConvex(Message);
+            Status = Message;
+        }
+        else
+        {
+            Status = TEXT("Symmetry disabled. Marker moves will update only the selected convex points without mirroring.");
+        }
+    }
+    void OnSymmetryXChanged(ECheckBoxState State) { bSymmetryX = State == ECheckBoxState::Checked; }
+    void OnSymmetryYChanged(ECheckBoxState State) { bSymmetryY = State == ECheckBoxState::Checked; }
+    void OnSymmetryZChanged(ECheckBoxState State) { bSymmetryZ = State == ECheckBoxState::Checked; }
 
     EActiveTimerReturnType OnLiveUpdateTimer(double, float)
     {
@@ -749,9 +811,18 @@ private:
             if (FVehiclePhATNativeConvexTool::DebouncedUpdateConvexFromViewportVertexMarkers(0.6f, Message))
             {
                 ConvexIndex = FMath::Max(0, FVehiclePhATNativeConvexTool::GetConvexIndex());
-                SetPointsTextFromPoints(FVehiclePhATNativeConvexTool::GetPoints());
-                SyncTextBox();
-                Status = Message;
+                if (bSymmetryEnabled)
+                {
+                    FString SymmetryMessage;
+                    ApplySymmetryToSelectedConvex(SymmetryMessage);
+                    Status = Message + TEXT("\n") + SymmetryMessage;
+                }
+                else
+                {
+                    SetPointsTextFromPoints(FVehiclePhATNativeConvexTool::GetPoints());
+                    SyncTextBox();
+                    Status = Message;
+                }
             }
         }
         return EActiveTimerReturnType::Continue;
@@ -854,6 +925,139 @@ private:
             Status = FString::Printf(TEXT("Applied %d table coordinate(s) to marker spheres. %s"), Points.Num(), *Message);
         }
         return FReply::Handled();
+    }
+
+    FReply OnApplySymmetryNow()
+    {
+        bSymmetryEnabled = true;
+        FString Message;
+        ApplySymmetryToSelectedConvex(Message);
+        Status = Message;
+        return FReply::Handled();
+    }
+
+    bool ApplySymmetryToSelectedConvex(FString& OutMessage)
+    {
+        USkeletalBodySetup* BodySetup = FVehiclePhATBodyUtils::FindBodySetup(PhysicsAsset, BoneName);
+        if (!BodySetup)
+        {
+            OutMessage = FString::Printf(TEXT("Body '%s' was not found. Symmetry was not applied."), *BoneName.ToString());
+            return false;
+        }
+
+        if (!BodySetup->AggGeom.ConvexElems.IsValidIndex(ConvexIndex))
+        {
+            OutMessage = FString::Printf(TEXT("Body '%s' has %d convex element(s); selected convex index %d is invalid. Symmetry works only on the selected convex."), *BoneName.ToString(), BodySetup->AggGeom.ConvexElems.Num(), ConvexIndex);
+            return false;
+        }
+
+        TArray<FVector> SourcePoints = ParsePointsFromText();
+        FString MarkerMessage;
+        if (FVehiclePhATNativeConvexTool::PullPointsFromViewportVertexMarkers(MarkerMessage))
+        {
+            SourcePoints = FVehiclePhATNativeConvexTool::GetPoints();
+        }
+
+        TArray<FVector> SymmetricPoints;
+        FString SymmetryMessage;
+        if (!BuildSymmetricPoints(SourcePoints, SymmetricPoints, SymmetryMessage))
+        {
+            OutMessage = SymmetryMessage;
+            return false;
+        }
+
+        SetPointsTextFromPoints(SymmetricPoints);
+        SyncTextBox();
+        RebuildNativeViewportMarkers(SymmetricPoints);
+
+        FString ReplaceMessage;
+        const bool bReplaced = FVehiclePhATConvexUtils::ReplaceConvexFromPoints(PhysicsAsset, BodySetup, ConvexIndex, SymmetricPoints, ReplaceMessage);
+        OutMessage = FString::Printf(TEXT("Symmetry %s for selected convex %d on '%s' using axes %s%s%s: %d -> %d point(s). %s"),
+            bReplaced ? TEXT("enabled/applied") : TEXT("failed"),
+            ConvexIndex,
+            *BoneName.ToString(),
+            bSymmetryX ? TEXT("X") : TEXT(""),
+            bSymmetryY ? TEXT("Y") : TEXT(""),
+            bSymmetryZ ? TEXT("Z") : TEXT(""),
+            SourcePoints.Num(),
+            SymmetricPoints.Num(),
+            *ReplaceMessage);
+        return bReplaced;
+    }
+
+    bool BuildSymmetricPoints(const TArray<FVector>& SourcePoints, TArray<FVector>& OutSymmetricPoints, FString& OutMessage) const
+    {
+        if (!bSymmetryX && !bSymmetryY && !bSymmetryZ)
+        {
+            OutMessage = TEXT("Select at least one symmetry axis (X, Y or Z), then enable Symmetry or click Apply Symmetry Now.");
+            return false;
+        }
+
+        if (SourcePoints.Num() < 1)
+        {
+            OutMessage = TEXT("No convex points are available for symmetry.");
+            return false;
+        }
+
+        FBox Bounds(ForceInit);
+        for (const FVector& Point : SourcePoints)
+        {
+            Bounds += Point;
+        }
+
+        const FVector Center = Bounds.GetCenter();
+        TArray<int32> Axes;
+        if (bSymmetryX) { Axes.Add(0); }
+        if (bSymmetryY) { Axes.Add(1); }
+        if (bSymmetryZ) { Axes.Add(2); }
+
+        OutSymmetricPoints = SourcePoints;
+        auto AddUniquePoint = [&OutSymmetricPoints](const FVector& Candidate)
+        {
+            constexpr float DuplicateToleranceSquared = 0.01f;
+            for (const FVector& Existing : OutSymmetricPoints)
+            {
+                if (FVector::DistSquared(Existing, Candidate) <= DuplicateToleranceSquared)
+                {
+                    return;
+                }
+            }
+            OutSymmetricPoints.Add(Candidate);
+        };
+
+        for (const FVector& Point : SourcePoints)
+        {
+            for (int32 Mask = 1; Mask < (1 << Axes.Num()); ++Mask)
+            {
+                FVector MirroredPoint = Point;
+                for (int32 AxisIndex = 0; AxisIndex < Axes.Num(); ++AxisIndex)
+                {
+                    if ((Mask & (1 << AxisIndex)) == 0)
+                    {
+                        continue;
+                    }
+
+                    switch (Axes[AxisIndex])
+                    {
+                    case 0:
+                        MirroredPoint.X = 2.f * Center.X - MirroredPoint.X;
+                        break;
+                    case 1:
+                        MirroredPoint.Y = 2.f * Center.Y - MirroredPoint.Y;
+                        break;
+                    case 2:
+                        MirroredPoint.Z = 2.f * Center.Z - MirroredPoint.Z;
+                        break;
+                    default:
+                        break;
+                    }
+                }
+                AddUniquePoint(MirroredPoint);
+            }
+        }
+
+        OutMessage = FString::Printf(TEXT("Built symmetric point cloud: %d -> %d point(s)."), SourcePoints.Num(), OutSymmetricPoints.Num());
+        return true;
     }
 
     void LoadCurrentConvex()
