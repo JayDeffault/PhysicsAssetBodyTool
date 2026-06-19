@@ -334,7 +334,7 @@ bool FVehiclePhATNativeConvexTool::RebuildViewportVertexMarkers(float MarkerRadi
         }
 
         const float IndexScale = 1.f + static_cast<float>(PointIndex % 10) * 0.06f;
-        Marker->Name = FName(*FString::Printf(TEXT("VPhAT_Marker_%02d"), PointIndex));
+        Marker->SetName(FName(*FString::Printf(TEXT("VPhAT_Marker_%02d"), PointIndex)));
         Marker->Center = Points[PointIndex];
         Marker->Radius = PointIndex == SelectedIndex ? SafeRadius * 1.75f : SafeRadius * IndexScale;
     }
@@ -342,7 +342,7 @@ bool FVehiclePhATNativeConvexTool::RebuildViewportVertexMarkers(float MarkerRadi
     for (int32 MarkerOffset = Points.Num(); MarkerOffset < MarkerAllocatedCount; ++MarkerOffset)
     {
         FKSphereElem& Marker = BodySetup->AggGeom.SphereElems[MarkerStartIndex + MarkerOffset];
-        Marker.Name = FName(*FString::Printf(TEXT("VPhAT_Marker_Hidden_%02d"), MarkerOffset));
+        Marker.SetName(FName(*FString::Printf(TEXT("VPhAT_Marker_Hidden_%02d"), MarkerOffset)));
         Marker.Radius = HiddenRadius;
     }
 
