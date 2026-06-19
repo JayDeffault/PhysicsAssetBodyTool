@@ -136,6 +136,8 @@ Live-created convex elements are reused for subsequent marker moves. If the conv
 
 Use **Add Marker Vertex** to append a new marker sphere outside the current point bounds, rather than inside the existing hull. If a marker is already selected or was the most recently moved marker, the tool reuses that marker's primitive slot for the new point and moves the previous point to the end of the point list, which keeps the native PhAT transform gizmo on the newly added marker. The new marker is also drawn larger so it is easy to find. Preview/Rebuild pulls current viewport marker positions before rebuilding markers, so moved marker positions are not overwritten by stale text coordinates.
 
+The coordinate table labels every point as `Index: X Y Z` (for example, `3: 12.5 0.0 40.0`) so marker spheres can be identified and adjusted numerically. The parser still accepts the old `X Y Z` format, so the numeric label can be left in place or omitted when editing.
+
 ## Skeletal mesh vertex snapping scaffold
 
 `FVehiclePhATNativeConvexTool` can now snap candidate convex points to the nearest vertex in the preview Skeletal Mesh render data. The native PhAT viewport bridge should call `AddPointSnappedToMesh` / `MoveHoveredPointSnappedToMesh` after converting the viewport hit location into PhysicsAsset local space.

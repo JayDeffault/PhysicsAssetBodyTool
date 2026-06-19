@@ -378,7 +378,7 @@ public:
             + SVerticalBox::Slot().AutoHeight().Padding(6)
             [
                 SNew(STextBlock)
-                .Text(LOCTEXT("ConvexCreateHelp", "MVP 4 convex creation: select a body bone, edit/paste local-space point coordinates, preview count, then apply as FKConvexElem. One point per line: X Y Z."))
+                .Text(LOCTEXT("ConvexCreateHelp", "MVP 4 convex creation: select a body bone, edit/paste local-space point coordinates, preview count, then apply as FKConvexElem. One point per line: Index: X Y Z (the index label is optional)."))
                 .AutoWrapText(true)
             ]
             + SVerticalBox::Slot().AutoHeight().Padding(6)
@@ -532,6 +532,7 @@ private:
         for (FString Line : Lines)
         {
             Line.ReplaceInline(TEXT(","), TEXT(" "));
+            Line.ReplaceInline(TEXT(":"), TEXT(" "));
             TArray<FString> Tokens;
             Line.ParseIntoArrayWS(Tokens);
             if (Tokens.Num() < 3)
@@ -539,7 +540,16 @@ private:
                 continue;
             }
 
-            Points.Add(FVector(FCString::Atof(*Tokens[0]), FCString::Atof(*Tokens[1]), FCString::Atof(*Tokens[2])));
+            const int32 CoordinateOffset = Tokens.Num() >= 4 && Tokens[0].IsNumeric() ? 1 : 0;
+            if (Tokens.Num() < CoordinateOffset + 3)
+            {
+                continue;
+            }
+
+            Points.Add(FVector(
+                FCString::Atof(*Tokens[CoordinateOffset + 0]),
+                FCString::Atof(*Tokens[CoordinateOffset + 1]),
+                FCString::Atof(*Tokens[CoordinateOffset + 2])));
         }
         return Points;
     }
@@ -585,9 +595,10 @@ private:
     void SetPointsTextFromPoints(const TArray<FVector>& Points)
     {
         PointsText.Reset();
-        for (const FVector& Point : Points)
+        for (int32 PointIndex = 0; PointIndex < Points.Num(); ++PointIndex)
         {
-            PointsText += FString::Printf(TEXT("%.3f %.3f %.3f\n"), Point.X, Point.Y, Point.Z);
+            const FVector& Point = Points[PointIndex];
+            PointsText += FString::Printf(TEXT("%d: %.3f %.3f %.3f\n"), PointIndex, Point.X, Point.Y, Point.Z);
         }
     }
 
@@ -654,7 +665,7 @@ public:
             + SVerticalBox::Slot().AutoHeight().Padding(6)
             [
                 SNew(STextBlock)
-                .Text(LOCTEXT("ConvexEditHelp", "MVP 5 convex edit: extract existing FKConvexElem vertices, edit the point cloud, then rebuild/replace that convex element. One local-space point per line: X Y Z."))
+                .Text(LOCTEXT("ConvexEditHelp", "MVP 5 convex edit: extract existing FKConvexElem vertices, edit the point cloud, then rebuild/replace that convex element. One local-space point per line: Index: X Y Z (the index label is optional)."))
                 .AutoWrapText(true)
             ]
             + SVerticalBox::Slot().AutoHeight().Padding(6)
@@ -842,13 +853,22 @@ private:
         for (FString Line : Lines)
         {
             Line.ReplaceInline(TEXT(","), TEXT(" "));
+            Line.ReplaceInline(TEXT(":"), TEXT(" "));
             TArray<FString> Tokens;
             Line.ParseIntoArrayWS(Tokens);
             if (Tokens.Num() < 3)
             {
                 continue;
             }
-            Points.Add(FVector(FCString::Atof(*Tokens[0]), FCString::Atof(*Tokens[1]), FCString::Atof(*Tokens[2])));
+            const int32 CoordinateOffset = Tokens.Num() >= 4 && Tokens[0].IsNumeric() ? 1 : 0;
+            if (Tokens.Num() < CoordinateOffset + 3)
+            {
+                continue;
+            }
+            Points.Add(FVector(
+                FCString::Atof(*Tokens[CoordinateOffset + 0]),
+                FCString::Atof(*Tokens[CoordinateOffset + 1]),
+                FCString::Atof(*Tokens[CoordinateOffset + 2])));
         }
         return Points;
     }
@@ -856,9 +876,10 @@ private:
     void SetPointsTextFromPoints(const TArray<FVector>& Points)
     {
         PointsText.Reset();
-        for (const FVector& Point : Points)
+        for (int32 PointIndex = 0; PointIndex < Points.Num(); ++PointIndex)
         {
-            PointsText += FString::Printf(TEXT("%.3f %.3f %.3f\n"), Point.X, Point.Y, Point.Z);
+            const FVector& Point = Points[PointIndex];
+            PointsText += FString::Printf(TEXT("%d: %.3f %.3f %.3f\n"), PointIndex, Point.X, Point.Y, Point.Z);
         }
     }
 
