@@ -1,5 +1,6 @@
 #include "VehiclePhATMirrorUtils.h"
 
+#include "Engine/SkeletalMesh.h"
 #include "PhysicsEngine/AggregateGeom.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "PhysicsEngine/PhysicsAsset.h"
@@ -7,6 +8,38 @@
 #include "ScopedTransaction.h"
 #include "VehiclePhATBodyUtils.h"
 #include "VehiclePhATToolsLog.h"
+
+namespace
+{
+bool GetReferenceSkeletonComponentTransform(const UPhysicsAsset* PhysicsAsset, const FName BoneName, FTransform& OutTransform)
+{
+    if (!PhysicsAsset || !PhysicsAsset->PreviewSkeletalMesh.Get())
+    {
+        return false;
+    }
+
+    const FReferenceSkeleton& ReferenceSkeleton = PhysicsAsset->PreviewSkeletalMesh.Get()->GetRefSkeleton();
+    const int32 BoneIndex = ReferenceSkeleton.FindBoneIndex(BoneName);
+    if (BoneIndex == INDEX_NONE)
+    {
+        return false;
+    }
+
+    TArray<FTransform> ComponentSpaceTransforms;
+    ComponentSpaceTransforms.SetNum(ReferenceSkeleton.GetNum());
+    for (int32 Index = 0; Index < ReferenceSkeleton.GetNum(); ++Index)
+    {
+        const int32 ParentIndex = ReferenceSkeleton.GetParentIndex(Index);
+        const FTransform& LocalTransform = ReferenceSkeleton.GetRefBonePose()[Index];
+        ComponentSpaceTransforms[Index] = ParentIndex == INDEX_NONE
+            ? LocalTransform
+            : LocalTransform * ComponentSpaceTransforms[ParentIndex];
+    }
+
+    OutTransform = ComponentSpaceTransforms[BoneIndex];
+    return true;
+}
+}
 
 FString FVehiclePhATMirrorUtils::PatternToToken(const FString& Pattern)
 {
@@ -64,19 +97,30 @@ FQuat FVehiclePhATMirrorUtils::MirrorQuat(const FQuat& Value, EVehiclePhATMirror
     return FRotationMatrix::MakeFromXZ(XAxis, ZAxis).ToQuat();
 }
 
-void FVehiclePhATMirrorUtils::MirrorAggGeom(FKAggregateGeom& AggGeom, const FVehiclePhATMirrorOptions& Options)
+void FVehiclePhATMirrorUtils::MirrorAggGeom(FKAggregateGeom& AggGeom, const FVehiclePhATMirrorOptions& Options, const FTransform& SourceBoneToWorld, const FTransform& TargetBoneToWorld)
 {
-    auto MirrorTransform = [&Options](FTransform Transform)
+    auto MirrorTransform = [&Options, &SourceBoneToWorld, &TargetBoneToWorld](const FTransform& SourceLocalTransform)
     {
+        FTransform WorldTransform = SourceLocalTransform * SourceBoneToWorld;
         if (Options.bMirrorLocation)
         {
-            Transform.SetLocation(MirrorVector(Transform.GetLocation(), Options.Axis));
+            WorldTransform.SetLocation(MirrorVector(WorldTransform.GetLocation(), Options.Axis));
         }
         if (Options.bMirrorRotation)
         {
-            Transform.SetRotation(MirrorQuat(Transform.GetRotation(), Options.Axis));
+            WorldTransform.SetRotation(MirrorQuat(WorldTransform.GetRotation(), Options.Axis));
         }
-        return Transform;
+        return WorldTransform.GetRelativeTransform(TargetBoneToWorld);
+    };
+
+    auto MirrorPoint = [&Options, &SourceBoneToWorld, &TargetBoneToWorld](const FVector& SourceLocalPoint)
+    {
+        FVector WorldPoint = SourceBoneToWorld.TransformPosition(SourceLocalPoint);
+        if (Options.bMirrorLocation)
+        {
+            WorldPoint = MirrorVector(WorldPoint, Options.Axis);
+        }
+        return TargetBoneToWorld.InverseTransformPosition(WorldPoint);
     };
 
     for (FKBoxElem& Box : AggGeom.BoxElems)
@@ -98,7 +142,7 @@ void FVehiclePhATMirrorUtils::MirrorAggGeom(FKAggregateGeom& AggGeom, const FVeh
     {
         if (Options.bMirrorLocation)
         {
-            Sphere.Center = MirrorVector(Sphere.Center, Options.Axis);
+            Sphere.Center = MirrorPoint(Sphere.Center);
         }
     }
 
@@ -109,7 +153,7 @@ void FVehiclePhATMirrorUtils::MirrorAggGeom(FKAggregateGeom& AggGeom, const FVeh
         {
             for (FVector& Vertex : Convex.VertexData)
             {
-                Vertex = MirrorVector(Vertex, Options.Axis);
+                Vertex = MirrorPoint(Vertex);
             }
         }
         Convex.UpdateElemBox();
@@ -236,7 +280,17 @@ bool FVehiclePhATMirrorUtils::ApplyMirror(UPhysicsAsset* PhysicsAsset, const FVe
         }
         TargetBody->BoneName = Pair.TargetBone;
         TargetBody->AggGeom = SourceBody->AggGeom;
-        MirrorAggGeom(TargetBody->AggGeom, Options);
+
+        FTransform SourceBoneToWorld = FTransform::Identity;
+        FTransform TargetBoneToWorld = FTransform::Identity;
+        const bool bHasReferenceTransforms = GetReferenceSkeletonComponentTransform(PhysicsAsset, Pair.SourceBone, SourceBoneToWorld)
+            && GetReferenceSkeletonComponentTransform(PhysicsAsset, Pair.TargetBone, TargetBoneToWorld);
+        if (!bHasReferenceTransforms)
+        {
+            UE_LOG(LogVehiclePhATTools, Warning, TEXT("Mirroring %s -> %s without reference skeleton transforms; falling back to identity bone transforms."), *Pair.SourceBone.ToString(), *Pair.TargetBone.ToString());
+        }
+
+        MirrorAggGeom(TargetBody->AggGeom, Options, SourceBoneToWorld, TargetBoneToWorld);
         TargetBody->InvalidatePhysicsData();
         ++MirroredCount;
     }

@@ -112,7 +112,7 @@ Direct viewport rendering/input still has to be connected inside the native Phys
 
 ## Mirror troubleshooting notes
 
-Mirror apply now duplicates source body setups for newly created target bodies instead of constructing blank body setups first, invalidates target body physics data after mirrored geometry is assigned, and drops invalid mirrored convex elements with fewer than four vertices or NaN coordinates. These guards are intended to avoid debugger breakpoints/asserts during mirror while still creating valid mirrored bodies.
+Mirror apply now duplicates source body setups for newly created target bodies instead of constructing blank body setups first, invalidates target body physics data after mirrored geometry is assigned, and drops invalid mirrored convex elements with fewer than four vertices or NaN coordinates. Mirroring is performed like the Edit Convex symmetry workflow, but from one source bone to one target bone: source shape transforms/vertices are transformed from source-bone local space into Preview Skeletal Mesh reference/world space, mirrored across the selected world axis around coordinate 0, then transformed into target-bone local space before being written to the target body. These guards are intended to avoid debugger breakpoints/asserts during mirror while still creating valid mirrored bodies.
 
 ## Native PhAT convex editing direction
 

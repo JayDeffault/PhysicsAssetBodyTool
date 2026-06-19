@@ -16,5 +16,5 @@ public:
     static FName MakeTargetName(FName SourceName, const FString& SourcePattern, const FString& TargetPattern);
     static FVector MirrorVector(const FVector& Value, EVehiclePhATMirrorAxis Axis);
     static FQuat MirrorQuat(const FQuat& Value, EVehiclePhATMirrorAxis Axis);
-    static void MirrorAggGeom(FKAggregateGeom& AggGeom, const FVehiclePhATMirrorOptions& Options);
+    static void MirrorAggGeom(FKAggregateGeom& AggGeom, const FVehiclePhATMirrorOptions& Options, const FTransform& SourceBoneToWorld, const FTransform& TargetBoneToWorld);
 };
