@@ -132,6 +132,8 @@ Until the Physics Asset Editor viewport client is directly extended, the Create/
 
 The convex dialogs also poll the marker spheres while open, but they debounce updates: the target `FKConvexElem` is updated only after marker positions stop changing for a short delay, not on every tick while the transform gizmo is moving. In create mode the first settled marker movement creates a live convex element, then later settled marker movements update that same element instead of adding duplicates.
 
+Live-created convex elements are reused for subsequent marker moves. If the convex tool is restarted or stopped before the user explicitly applies the live-created convex, the temporary live convex is removed so stale duplicates are not left behind.
+
 Use **Add Marker Vertex** to append a new marker sphere near the current/last marker. The new marker is made the active marker and drawn larger so it is easy to find and move with the standard PhAT transform gizmo.
 
 ## Skeletal mesh vertex snapping scaffold

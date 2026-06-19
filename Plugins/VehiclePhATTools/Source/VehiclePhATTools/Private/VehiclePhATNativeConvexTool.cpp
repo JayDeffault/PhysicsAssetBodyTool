@@ -26,6 +26,7 @@ TArray<FVector> LastLiveUpdatePoints;
 TArray<FVector> LastObservedMarkerPoints;
 double LastObservedMarkerChangeTime = 0.0;
 bool bPendingDebouncedUpdate = false;
+bool bLiveCreatedConvex = false;
 }
 
 namespace
@@ -47,11 +48,30 @@ bool ArePointArraysNearlyEqual(const TArray<FVector>& A, const TArray<FVector>& 
 
     return true;
 }
+
+void RemoveUnappliedLiveCreatedConvex()
+{
+    using namespace VehiclePhATNativeConvexToolState;
+    UPhysicsAsset* ActivePhysicsAsset = PhysicsAsset.Get();
+    USkeletalBodySetup* BodySetup = FVehiclePhATBodyUtils::FindBodySetup(ActivePhysicsAsset, BodyBone);
+    if (!bLiveCreatedConvex || !ActivePhysicsAsset || !BodySetup || !BodySetup->AggGeom.ConvexElems.IsValidIndex(ConvexIndex))
+    {
+        bLiveCreatedConvex = false;
+        return;
+    }
+
+    ActivePhysicsAsset->Modify();
+    BodySetup->Modify();
+    BodySetup->AggGeom.ConvexElems.RemoveAt(ConvexIndex);
+    FVehiclePhATBodyUtils::MarkBodySetupGeometryChanged(ActivePhysicsAsset, BodySetup);
+    bLiveCreatedConvex = false;
+}
 }
 
 void FVehiclePhATNativeConvexTool::StartCreate(UPhysicsAsset* PhysicsAsset, FName BodyBone)
 {
     using namespace VehiclePhATNativeConvexToolState;
+    RemoveUnappliedLiveCreatedConvex();
     Mode = EMode::Create;
     VehiclePhATNativeConvexToolState::PhysicsAsset = PhysicsAsset;
     VehiclePhATNativeConvexToolState::BodyBone = BodyBone;
@@ -66,12 +86,14 @@ void FVehiclePhATNativeConvexTool::StartCreate(UPhysicsAsset* PhysicsAsset, FNam
     LastObservedMarkerPoints.Reset();
     LastObservedMarkerChangeTime = 0.0;
     bPendingDebouncedUpdate = false;
+    bLiveCreatedConvex = false;
     UE_LOG(LogVehiclePhATTools, Log, TEXT("Native convex create mode started for body '%s'."), *BodyBone.ToString());
 }
 
 void FVehiclePhATNativeConvexTool::StartEdit(UPhysicsAsset* PhysicsAsset, FName BodyBone, int32 InConvexIndex)
 {
     using namespace VehiclePhATNativeConvexToolState;
+    RemoveUnappliedLiveCreatedConvex();
     Mode = EMode::Edit;
     VehiclePhATNativeConvexToolState::PhysicsAsset = PhysicsAsset;
     VehiclePhATNativeConvexToolState::BodyBone = BodyBone;
@@ -86,6 +108,7 @@ void FVehiclePhATNativeConvexTool::StartEdit(UPhysicsAsset* PhysicsAsset, FName 
     LastObservedMarkerPoints.Reset();
     LastObservedMarkerChangeTime = 0.0;
     bPendingDebouncedUpdate = false;
+    bLiveCreatedConvex = false;
     LoadExistingConvex();
     UE_LOG(LogVehiclePhATTools, Log, TEXT("Native convex edit mode started for body '%s' convex %d."), *BodyBone.ToString(), InConvexIndex);
 }
@@ -93,6 +116,7 @@ void FVehiclePhATNativeConvexTool::StartEdit(UPhysicsAsset* PhysicsAsset, FName 
 void FVehiclePhATNativeConvexTool::Stop()
 {
     using namespace VehiclePhATNativeConvexToolState;
+    RemoveUnappliedLiveCreatedConvex();
     Mode = EMode::Inactive;
     PhysicsAsset.Reset();
     BodyBone = NAME_None;
@@ -107,6 +131,7 @@ void FVehiclePhATNativeConvexTool::Stop()
     LastObservedMarkerPoints.Reset();
     LastObservedMarkerChangeTime = 0.0;
     bPendingDebouncedUpdate = false;
+    bLiveCreatedConvex = false;
 }
 
 bool FVehiclePhATNativeConvexTool::IsActive()
@@ -465,19 +490,20 @@ bool FVehiclePhATNativeConvexTool::LiveUpdateConvexFromViewportVertexMarkers(FSt
         return false;
     }
 
-    if (Mode == EMode::Create || !BodySetup->AggGeom.ConvexElems.IsValidIndex(ConvexIndex))
+    if (BodySetup->AggGeom.ConvexElems.IsValidIndex(ConvexIndex))
+    {
+        FKConvexElem& Convex = BodySetup->AggGeom.ConvexElems[ConvexIndex];
+        Convex.VertexData = Points;
+        Convex.UpdateElemBox();
+    }
+    else
     {
         FKConvexElem& NewConvex = BodySetup->AggGeom.ConvexElems.AddDefaulted_GetRef();
         NewConvex.VertexData = Points;
         NewConvex.UpdateElemBox();
         ConvexIndex = BodySetup->AggGeom.ConvexElems.Num() - 1;
         Mode = EMode::Edit;
-    }
-    else
-    {
-        FKConvexElem& Convex = BodySetup->AggGeom.ConvexElems[ConvexIndex];
-        Convex.VertexData = Points;
-        Convex.UpdateElemBox();
+        bLiveCreatedConvex = true;
     }
 
     LastLiveUpdatePoints = Points;
@@ -874,12 +900,16 @@ bool FVehiclePhATNativeConvexTool::Apply(FString& OutMessage)
 
     if (Mode == EMode::Create)
     {
-        return FVehiclePhATConvexUtils::AddConvexFromPoints(PhysicsAsset.Get(), BodySetup, Points, OutMessage);
+        const bool bApplied = FVehiclePhATConvexUtils::AddConvexFromPoints(PhysicsAsset.Get(), BodySetup, Points, OutMessage);
+        bLiveCreatedConvex = false;
+        return bApplied;
     }
 
     if (Mode == EMode::Edit)
     {
-        return FVehiclePhATConvexUtils::ReplaceConvexFromPoints(PhysicsAsset.Get(), BodySetup, ConvexIndex, Points, OutMessage);
+        const bool bApplied = FVehiclePhATConvexUtils::ReplaceConvexFromPoints(PhysicsAsset.Get(), BodySetup, ConvexIndex, Points, OutMessage);
+        bLiveCreatedConvex = false;
+        return bApplied;
     }
 
     OutMessage = TEXT("Native convex tool is inactive.");
