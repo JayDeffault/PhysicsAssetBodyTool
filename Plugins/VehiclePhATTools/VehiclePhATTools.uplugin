@@ -1,0 +1,19 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "1.0.0",
+  "FriendlyName": "Vehicle PhAT Tools",
+  "Description": "Editor tools for faster vehicle Physics Asset body and constraint setup.",
+  "Category": "Physics",
+  "CreatedBy": "OpenAI",
+  "EnabledByDefault": true,
+  "CanContainContent": false,
+  "IsBetaVersion": true,
+  "Modules": [
+    {
+      "Name": "VehiclePhATTools",
+      "Type": "Editor",
+      "LoadingPhase": "Default"
+    }
+  ]
+}

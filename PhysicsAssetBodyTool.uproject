@@ -1,0 +1,16 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.5",
+  "Category": "Tools",
+  "Description": "Host project for building and testing the VehiclePhATTools editor plugin.",
+  "Modules": [],
+  "Plugins": [
+    {
+      "Name": "VehiclePhATTools",
+      "Enabled": true,
+      "TargetAllowList": [
+        "Editor"
+      ]
+    }
+  ]
+}
