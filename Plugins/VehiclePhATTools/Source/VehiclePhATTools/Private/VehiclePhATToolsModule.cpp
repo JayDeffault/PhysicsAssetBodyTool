@@ -418,6 +418,10 @@ public:
                 [SNew(STextBlock).Text(LOCTEXT("ConvexBone", "Target body bone"))]
                 + SUniformGridPanel::Slot(1, 0)
                 [SNew(SEditableTextBox).Text(this, &SConvexCreationDialog::GetBoneText).OnTextCommitted(this, &SConvexCreationDialog::OnBoneCommitted)]
+                + SUniformGridPanel::Slot(0, 1)
+                [SNew(STextBlock).Text(LOCTEXT("ConvexUCXPath", "UCX JSON/FBX path"))]
+                + SUniformGridPanel::Slot(1, 1)
+                [SNew(SEditableTextBox).Text(this, &SConvexCreationDialog::GetUcXPathText).OnTextCommitted(this, &SConvexCreationDialog::OnUcXPathCommitted)]
             ]
             + SVerticalBox::Slot().FillHeight(1.f).Padding(6)
             [
@@ -441,6 +445,8 @@ public:
                 [SNew(SButton).Text(LOCTEXT("AddCreateConvexMarker", "Add Marker Vertex")).OnClicked(this, &SConvexCreationDialog::OnAddMarker)]
                 + SUniformGridPanel::Slot(5, 0)
                 [SNew(SButton).Text(LOCTEXT("ApplyCreateConvexTable", "Apply Table Coordinates")).OnClicked(this, &SConvexCreationDialog::OnApplyTableCoordinates)]
+                + SUniformGridPanel::Slot(0, 1)
+                [SNew(SButton).Text(LOCTEXT("ImportUCXCollision", "Import UCX JSON/FBX")).OnClicked(this, &SConvexCreationDialog::OnImportUCX)]
             ]
         ];
     }
@@ -449,11 +455,13 @@ private:
     UPhysicsAsset* PhysicsAsset = nullptr;
     FName BoneName;
     FString PointsText;
+    FString UcXFilePath;
     FString Status;
     bool bLiveUpdateConvex = true;
     TSharedPtr<SMultiLineEditableTextBox> PointsTextBox;
 
     FText GetBoneText() const { return FText::FromName(BoneName); }
+    FText GetUcXPathText() const { return FText::FromString(UcXFilePath); }
     FText GetPointsText() const { return FText::FromString(PointsText); }
     FText GetStatusText() const { return FText::FromString(Status); }
 
@@ -480,6 +488,11 @@ private:
         {
             PointsTextBox->SetText(FText::FromString(PointsText));
         }
+    }
+
+    void OnUcXPathCommitted(const FText& Text, ETextCommit::Type)
+    {
+        UcXFilePath = Text.ToString().TrimStartAndEnd();
     }
 
     FReply OnSeedFromBody()
@@ -569,6 +582,33 @@ private:
         else
         {
             Status = FString::Printf(TEXT("Applied %d table coordinate(s) to marker spheres. %s"), Points.Num(), *Message);
+        }
+        return FReply::Handled();
+    }
+
+    FReply OnImportUCX()
+    {
+        if (UcXFilePath.IsEmpty())
+        {
+            Status = TEXT("Enter a JSON or ASCII FBX file path before importing UCX collision.");
+            return FReply::Handled();
+        }
+
+        if (USkeletalBodySetup* BodySetup = FVehiclePhATBodyUtils::FindBodySetup(PhysicsAsset, BoneName))
+        {
+            FString Message;
+            if (FVehiclePhATConvexUtils::ImportUcXFromFile(PhysicsAsset, BodySetup, UcXFilePath, Message))
+            {
+                FVehiclePhATNativeConvexTool::StartEdit(PhysicsAsset, BoneName, FMath::Max(0, BodySetup->AggGeom.ConvexElems.Num() - 1));
+                SetPointsTextFromPoints(BodySetup->AggGeom.ConvexElems.Last().VertexData);
+                SyncTextBox();
+                RebuildNativeViewportMarkers(ParsePointsFromText());
+            }
+            Status = Message;
+        }
+        else
+        {
+            Status = FString::Printf(TEXT("Body '%s' was not found."), *BoneName.ToString());
         }
         return FReply::Handled();
     }

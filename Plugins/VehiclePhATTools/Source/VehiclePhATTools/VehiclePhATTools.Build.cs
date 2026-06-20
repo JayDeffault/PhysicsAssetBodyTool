@@ -11,7 +11,8 @@ public class VehiclePhATTools : ModuleRules
             "Core",
             "CoreUObject",
             "Engine",
-            "PhysicsCore"
+            "PhysicsCore",
+            "Json"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[]

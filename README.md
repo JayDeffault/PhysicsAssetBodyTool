@@ -102,6 +102,8 @@ For door-style presets, the parent reference frame is biased by the selected ang
 
 Current MVP 4 coverage includes a safe C++ Slate convex creation dialog. It lets you choose a target body bone, seed an editable local-space point cloud from the current body shape, paste or edit one `X Y Z` point per line, preview the parsed point count, and apply the points as a new `FKConvexElem` through `FVehiclePhATConvexUtils::AddConvexFromPoints` with Undo/Redo support.
 
+The Convex Creation tool can also import UCX collision from a JSON or ASCII FBX file path. JSON supports either raw `[[X,Y,Z], ...]` points or `{ "ucx": [{ "vertices": [[X,Y,Z], ...] }] }` / `convex` / `hulls` arrays. ASCII FBX import scans `UCX_*` mesh blocks and reads their `Vertices` arrays into one `FKConvexElem` per hull. Binary FBX is not parsed by this MVP importer; export ASCII FBX or JSON for this workflow.
+
 The full viewport vertex picker and automatic skeletal-mesh skin-weight vertex selection are still planned follow-up work.
 
 ## MVP 5 status
